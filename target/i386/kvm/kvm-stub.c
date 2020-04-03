@@ -39,3 +39,8 @@ bool kvm_hv_vpindex_settable(void)
 {
     return false;
 }
+
+int kvm_set_vm_type(MachineState *ms, int kvm_type)
+{
+    return 0;
+}

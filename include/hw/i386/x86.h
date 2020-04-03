@@ -56,6 +56,7 @@ struct X86MachineState {
 
     /* RAM information (sizes, addresses, configuration): */
     ram_addr_t below_4g_mem_size, above_4g_mem_size;
+    char *kvm_type;
 
     /* CPU and apic information: */
     bool apic_xrupt_override;
