@@ -2,6 +2,7 @@
 #define QEMU_I386_TDX_H
 
 #include "qom/object.h"
+#include "qapi/error.h"
 #include "exec/confidential-guest-support.h"
 
 #define TYPE_TDX_GUEST "tdx-guest"
@@ -20,5 +21,7 @@ typedef struct TdxGuest {
     bool initialized;
     bool debug;
 } TdxGuest;
+
+int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp);
 
 #endif
