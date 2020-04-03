@@ -21,6 +21,7 @@
  * THE SOFTWARE.
  */
 #include "qemu/osdep.h"
+#include <linux/kvm.h>
 #include "qemu/error-report.h"
 #include "qemu/option.h"
 #include "qemu/cutils.h"
@@ -31,6 +32,7 @@
 #include "qapi/qmp/qerror.h"
 #include "qapi/qapi-visit-common.h"
 #include "qapi/visitor.h"
+#include "sysemu/kvm_int.h"
 #include "sysemu/qtest.h"
 #include "sysemu/whpx.h"
 #include "sysemu/numa.h"
@@ -1263,6 +1265,42 @@ static void x86_machine_set_bus_lock_ratelimit(Object *obj, Visitor *v,
     visit_type_uint64(v, name, &x86ms->bus_lock_ratelimit, errp);
 }
 
+static char *x86_get_kvm_type(Object *obj, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+
+    return g_strdup(x86ms->kvm_type);
+}
+
+static void x86_set_kvm_type(Object *obj, const char *value, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+
+    g_free(x86ms->kvm_type);
+    x86ms->kvm_type = g_strdup(value);
+}
+
+static int x86_kvm_type(MachineState *ms, const char *vm_type)
+{
+    int kvm_type;
+
+    if (!vm_type || !strcmp(vm_type, "") ||
+        !g_ascii_strcasecmp(vm_type, "legacy")) {
+        kvm_type = KVM_X86_LEGACY_VM;
+    } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
+        kvm_type = KVM_X86_TDX_VM;
+    } else {
+        error_report("Unknown kvm-type specified '%s'", vm_type);
+        exit(1);
+    }
+    if (kvm_set_vm_type(ms, kvm_type)) {
+        error_report("kvm-type '%s' not supported by KVM", vm_type);
+        exit(1);
+    }
+
+    return kvm_type;
+}
+
 static void x86_machine_initfn(Object *obj)
 {
     X86MachineState *x86ms = X86_MACHINE(obj);
@@ -1273,6 +1311,11 @@ static void x86_machine_initfn(Object *obj)
     x86ms->oem_id = g_strndup(ACPI_BUILD_APPNAME6, 6);
     x86ms->oem_table_id = g_strndup(ACPI_BUILD_APPNAME8, 8);
     x86ms->bus_lock_ratelimit = 0;
+
+    object_property_add_str(obj, "kvm-type",
+                            x86_get_kvm_type, x86_set_kvm_type);
+    object_property_set_description(obj, "kvm-type",
+                                    "KVM guest type (legacy, tdx)");
 }
 
 static void x86_machine_class_init(ObjectClass *oc, void *data)
@@ -1284,6 +1327,7 @@ static void x86_machine_class_init(ObjectClass *oc, void *data)
     mc->cpu_index_to_instance_props = x86_cpu_index_to_props;
     mc->get_default_cpu_node_id = x86_get_default_cpu_node_id;
     mc->possible_cpu_arch_ids = x86_possible_cpu_arch_ids;
+    mc->kvm_type = x86_kvm_type;
     x86mc->compat_apic_id_mode = false;
     x86mc->save_tsc_khz = true;
     nc->nmi_monitor_handler = x86_nmi;
