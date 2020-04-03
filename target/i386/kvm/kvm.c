@@ -28,6 +28,7 @@
 #include "sysemu/hw_accel.h"
 #include "sysemu/kvm_int.h"
 #include "sysemu/runstate.h"
+#include "sysemu/tdx.h"
 #include "kvm_i386.h"
 #include "sev.h"
 #include "hyperv.h"
@@ -136,8 +137,23 @@ static struct kvm_cpuid2 *cpuid_cache;
 static struct kvm_cpuid2 *hv_cpuid_cache;
 static struct kvm_msr_list *kvm_feature_msrs;
 
+
 #define BUS_LOCK_SLICE_TIME 1000000000ULL /* ns */
 static RateLimit bus_lock_ratelimit_ctrl;
+
+static int vm_type;
+
+int kvm_set_vm_type(MachineState *ms, int kvm_type)
+{
+    if (kvm_type == KVM_X86_DEFAULT_VM ||
+        (kvm_type == KVM_X86_TDX_VM &&
+         kvm_has_tdx(KVM_STATE(ms->accelerator)))) {
+        vm_type = kvm_type;
+        return 0;
+    }
+
+    return -ENOTSUP;
+}
 
 int kvm_has_pit_state2(void)
 {
