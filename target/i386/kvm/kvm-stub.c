@@ -44,3 +44,8 @@ bool kvm_hyperv_expand_features(X86CPU *cpu, Error **errp)
 {
     abort();
 }
+
+int kvm_set_vm_type(MachineState *ms, int kvm_type)
+{
+    return 0;
+}
