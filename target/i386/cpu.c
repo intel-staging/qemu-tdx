@@ -28,6 +28,7 @@
 #include "tcg/helper-tcg.h"
 #include "exec/exec-all.h"
 #include "sysemu/kvm.h"
+#include "sysemu/tdx.h"
 #include "sysemu/reset.h"
 #include "sysemu/hvf.h"
 #include "sysemu/cpus.h"
@@ -6799,6 +6800,7 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
     }
 #endif
 
+    tdx_pre_create_vcpu(cs);
     qemu_init_vcpu(cs);
 
     /*
