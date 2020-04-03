@@ -51,6 +51,7 @@
 #include "migration/blocker.h"
 #include "exec/memattrs.h"
 #include "trace.h"
+#include "tdx.h"
 
 //#define DEBUG_KVM
 
@@ -2165,6 +2166,12 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
      * memory encryption context (no-op otherwise)
      */
     ret = sev_kvm_init(ms->cgs, &local_err);
+    if (ret < 0) {
+        error_report_err(local_err);
+        return ret;
+    }
+
+    ret = tdx_kvm_init(ms->cgs, &local_err);
     if (ret < 0) {
         error_report_err(local_err);
         return ret;
