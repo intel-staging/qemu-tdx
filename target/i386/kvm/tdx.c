@@ -58,6 +58,27 @@ static void __tdx_ioctl(int ioctl_no, const char *ioctl_name,
 #define tdx_ioctl(ioctl_no, metadata, data) \
         __tdx_ioctl(ioctl_no, stringify(ioctl_no), metadata, data)
 
+static void tdx_finalize_vm(Notifier *notifier, void *unused)
+{
+    tdx_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
+}
+
+static Notifier tdx_machine_done_late_notify = {
+    .notify = tdx_finalize_vm,
+};
+
+int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
+{
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(cgs),
+                                                    TYPE_TDX_GUEST);
+    if (!tdx) {
+        return 0;
+    }
+
+    qemu_add_machine_init_done_late_notifier(&tdx_machine_done_late_notify);
+    return 0;
+}
+
 void tdx_pre_create_vcpu(CPUState *cpu)
 {
     struct {
