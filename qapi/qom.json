@@ -786,6 +786,18 @@
             '*kernel-hashes': 'bool' } }
 
 ##
+# @TdxGuestProperties:
+#
+# Properties for sev-guest objects.
+#
+# @debug: enable debug mode (default: off)
+#
+# Since: 6.0
+##
+{ 'struct': 'TdxGuestProperties',
+  'data': { '*debug': 'bool' } }
+
+##
 # @ObjectType:
 #
 # Features:
@@ -837,6 +849,7 @@
       'if': 'CONFIG_SECRET_KEYRING' },
     'sev-guest',
     's390-pv-guest',
+    'tdx-guest',
     'throttle-group',
     'tls-creds-anon',
     'tls-creds-psk',
@@ -900,6 +913,7 @@
       'secret_keyring':             { 'type': 'SecretKeyringProperties',
                                       'if': 'CONFIG_SECRET_KEYRING' },
       'sev-guest':                  'SevGuestProperties',
+      'tdx-guest':                  'TdxGuestProperties',
       'throttle-group':             'ThrottleGroupProperties',
       'tls-creds-anon':             'TlsCredsAnonProperties',
       'tls-creds-psk':              'TlsCredsPskProperties',
