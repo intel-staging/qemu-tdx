@@ -8,3 +8,7 @@ bool kvm_has_tdx(KVMState *s)
         return false;
 }
 #endif
+
+void tdx_pre_create_vcpu(CPUState *cpu)
+{
+}
