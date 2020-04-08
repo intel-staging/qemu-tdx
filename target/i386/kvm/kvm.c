@@ -2810,6 +2810,11 @@ void kvm_put_apicbase(X86CPU *cpu, uint64_t value)
 {
     int ret;
 
+    /* TODO: Allow accessing guest state for debug TDs. */
+    if (vm_type == KVM_X86_TDX_VM) {
+            return;
+    }
+
     ret = kvm_put_one_msr(cpu, MSR_IA32_APICBASE, value);
     assert(ret == 1);
 }
@@ -4361,6 +4366,11 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
 
     assert(cpu_is_stopped(cpu) || qemu_cpu_is_self(cpu));
 
+    /* TODO: Allow accessing guest state for debug TDs. */
+    if (vm_type == KVM_X86_TDX_VM) {
+        return 0;
+    }
+
     /* must be before kvm_put_nested_state so that EFER.SVME is set */
     ret = has_sregs2 ? kvm_put_sregs2(x86_cpu) : kvm_put_sregs(x86_cpu);
     if (ret < 0) {
@@ -4471,9 +4481,11 @@ int kvm_arch_get_registers(CPUState *cs)
     if (ret < 0) {
         goto out;
     }
-    ret = kvm_get_msrs(cpu);
-    if (ret < 0) {
-        goto out;
+    if (vm_type != KVM_X86_TDX_VM) {
+        ret = kvm_get_msrs(cpu);
+        if (ret < 0) {
+            goto out;
+        }
     }
     ret = kvm_get_apic(cpu);
     if (ret < 0) {
