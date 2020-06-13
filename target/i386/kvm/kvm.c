@@ -481,6 +481,8 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
         ret |= 1U << KVM_HINTS_REALTIME;
     }
 
+    tdx_get_supported_cpuid(s, function, index, reg, &ret);
+
     return ret;
 }
 

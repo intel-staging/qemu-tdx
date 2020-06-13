@@ -21,6 +21,7 @@
 #include "hw/boards.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
+#include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
 #include "sysemu/kvm_int.h"
@@ -49,7 +50,15 @@ static int __tdx_ioctl(int ioctl_no, const char *ioctl_name,
     tdx_cmd.metadata = metadata;
     tdx_cmd.data = (__u64)(unsigned long)data;
 
-    r = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+    if (ioctl_no == KVM_TDX_CAPABILITIES) {
+        r = kvm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+    } else {
+        r = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+    }
+
+    if (ioctl_no == KVM_TDX_CAPABILITIES && r == -E2BIG)
+        return r;
+
     if (r) {
         error_report("%s failed: %s", ioctl_name, strerror(-r));
         exit(1);
@@ -68,16 +77,86 @@ static Notifier tdx_machine_done_late_notify = {
     .notify = tdx_finalize_vm,
 };
 
+static struct kvm_tdx_capabilities *tdx_caps = NULL;
+
+#define XCR0_MASK (MAKE_64BIT_MASK(0, 8) | BIT_ULL(9))
+#define XSS_MASK (~XCR0_MASK)
+
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 {
+    struct kvm_tdx_capabilities *caps;
+    uint32_t nr_cpuid_configs;
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(cgs),
                                                     TYPE_TDX_GUEST);
     if (!tdx) {
         return 0;
     }
 
+    caps = NULL;
+    nr_cpuid_configs = 8;
+    while (true) {
+        int r;
+        caps = g_realloc(caps, sizeof(*caps) +
+                        sizeof(*caps->cpuid_configs) * nr_cpuid_configs);
+        caps->nr_cpuid_configs = nr_cpuid_configs;
+        r = tdx_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+        if (r == -E2BIG) {
+            nr_cpuid_configs *= 2;
+            continue;
+        }
+        break;
+    }
+    tdx_caps = caps;
+
     qemu_add_machine_init_done_late_notifier(&tdx_machine_done_late_notify);
+
     return 0;
+}
+
+void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
+                             uint32_t index, int reg, uint32_t *ret)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                    TYPE_TDX_GUEST);
+
+    if (!tdx) {
+        return;
+    }
+
+    switch (function) {
+    case 1:
+        if (reg == R_ECX) {
+            *ret &= ~CPUID_EXT_VMX;
+        }
+        break;
+    case 0xd:
+        if (index == 0) {
+            if (reg == R_EAX) {
+                *ret &= (uint32_t)tdx_caps->xfam_fixed0 & XCR0_MASK;
+                *ret |= (uint32_t)tdx_caps->xfam_fixed1 & XCR0_MASK;
+            } else if (reg == R_EDX) {
+                *ret &= (tdx_caps->xfam_fixed0 & XCR0_MASK) >> 32;
+                *ret |= (tdx_caps->xfam_fixed1 & XCR0_MASK) >> 32;
+            }
+        } else if (index == 1) {
+            /* TODO: Adjust XSS when it's supported. */
+        }
+        break;
+    case KVM_CPUID_FEATURES:
+        if (reg == R_EAX) {
+            *ret &= ~((1ULL << KVM_FEATURE_CLOCKSOURCE) |
+                      (1ULL << KVM_FEATURE_CLOCKSOURCE2) |
+                      (1ULL << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) |
+                      (1ULL << KVM_FEATURE_ASYNC_PF) |
+                      (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT) |
+                      (1ULL << KVM_FEATURE_ASYNC_PF_INT));
+        }
+        break;
+    default:
+        /* TODO: Use tdx_caps to adjust CPUID leafs. */
+        break;
+    }
 }
 
 void tdx_pre_create_vcpu(CPUState *cpu)
@@ -106,10 +185,7 @@ void tdx_pre_create_vcpu(CPUState *cpu)
         return;
     }
 
-    /* HACK: Remove MPX support, which is not allowed by TDX. */
-    env->features[FEAT_XSAVE_COMP_LO] &= ~(XSTATE_BNDREGS_MASK |
-                                           XSTATE_BNDCSR_MASK);
-
+    /* TODO: Use tdx_caps to validate the config. */
     if (!(env->features[FEAT_1_ECX] & CPUID_EXT_XSAVE)) {
         error_report("TDX VM must support XSAVE features");
         exit(1);
