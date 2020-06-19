@@ -109,6 +109,11 @@ void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
         return;
 
     switch (function) {
+    case 1:
+        if (reg == R_ECX) {
+            *ret &= ~CPUID_EXT_VMX;
+        }
+        break;
     case 0xd:
         if (index == 0) {
             if (reg == R_EAX) {
