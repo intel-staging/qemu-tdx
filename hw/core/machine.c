@@ -1204,6 +1204,31 @@ void qemu_remove_machine_init_done_notifier(Notifier *notify)
     notifier_remove(notify);
 }
 
+static NotifierList machine_init_done_late_notifiers =
+    NOTIFIER_LIST_INITIALIZER(machine_init_done_late_notifiers);
+
+static bool machine_init_done_late;
+
+void qemu_add_machine_init_done_late_notifier(Notifier *notify)
+{
+    notifier_list_add(&machine_init_done_late_notifiers, notify);
+    if (machine_init_done_late) {
+        notify->notify(notify, NULL);
+    }
+}
+
+void qemu_remove_machine_init_done_late_notifier(Notifier *notify)
+{
+    notifier_remove(notify);
+}
+
+
+static void qemu_run_machine_init_done_late_notifiers(void)
+{
+    machine_init_done_late = true;
+    notifier_list_notify(&machine_init_done_late_notifiers, NULL);
+}
+
 void qdev_machine_creation_done(void)
 {
     cpu_synchronize_all_post_init();
@@ -1237,6 +1262,7 @@ void qdev_machine_creation_done(void)
     if (rom_check_and_register_reset() != 0) {
         exit(1);
     }
+    qemu_run_machine_init_done_late_notifiers();
 
     replay_start();
 

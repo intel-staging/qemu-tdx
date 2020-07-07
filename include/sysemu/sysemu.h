@@ -18,6 +18,8 @@ void qemu_remove_exit_notifier(Notifier *notify);
 
 void qemu_add_machine_init_done_notifier(Notifier *notify);
 void qemu_remove_machine_init_done_notifier(Notifier *notify);
+void qemu_add_machine_init_done_late_notifier(Notifier *notify);
+void qemu_remove_machine_init_done_late_notifier(Notifier *notify);
 
 void configure_rtc(QemuOpts *opts);
 
