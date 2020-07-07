@@ -285,10 +285,17 @@ out:
 
 void tdx_post_init_vcpu(CPUState *cpu)
 {
-    CPUX86State *env = &X86_CPU(cpu)->env;
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                    TYPE_TDX_GUEST);
+    TdxFirmwareEntry *hob;
 
-    _tdx_ioctl(cpu, KVM_TDX_INIT_VCPU, 0,
-               (void *)(unsigned long)env->regs[R_ECX]);
+    if (!tdx) {
+        return;
+    }
+
+    hob = tdx_get_hob_entry(tdx);
+    _tdx_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
 }
 
 static bool tdx_guest_get_debug(Object *obj, Error **errp)
