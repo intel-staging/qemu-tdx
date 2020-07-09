@@ -5,6 +5,30 @@
 #include "qapi/error.h"
 #include "exec/confidential-guest-support.h"
 
+typedef struct TdxFirmwareEntry {
+    uint32_t data_offset;
+    uint32_t data_len;
+    uint64_t address;
+    uint64_t size;
+    uint32_t type;
+    uint32_t attributes;
+
+    MemoryRegion *mr;
+    void *mem_ptr;
+} TdxFirmwareEntry;
+
+typedef struct TdxFirmware {
+    const char *file_name;
+    uint64_t file_size;
+
+    /* metadata */
+    uint32_t nr_entries;
+    TdxFirmwareEntry *entries;
+} TdxFirmware;
+
+#define for_each_fw_entry(fw, e)                                        \
+    for (e = (fw)->entries; e != (fw)->entries + (fw)->nr_entries; e++)
+
 #define TYPE_TDX_GUEST "tdx-guest"
 #define TDX_GUEST(obj)     \
     OBJECT_CHECK(TdxGuest, (obj), TYPE_TDX_GUEST)
@@ -20,6 +44,8 @@ typedef struct TdxGuest {
 
     bool initialized;
     bool debug;
+
+    TdxFirmware fw;
 } TdxGuest;
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp);
