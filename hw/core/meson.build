@@ -34,6 +34,9 @@ softmmu_ss.add(when: 'CONFIG_REGISTER', if_true: files('register.c'))
 softmmu_ss.add(when: 'CONFIG_SPLIT_IRQ', if_true: files('split-irq.c'))
 softmmu_ss.add(when: 'CONFIG_XILINX_AXI', if_true: files('stream.c'))
 
+common_ss.add(when: 'CONFIG_TDX', if_false: files('tdvf-stub.c'))
+common_ss.add(when: 'CONFIG_ALL', if_true: files('tdvf-stub.c'))
+
 softmmu_ss.add(files(
   'cpu-sysemu.c',
   'fw-path-provider.c',

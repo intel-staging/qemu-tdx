@@ -34,6 +34,7 @@
 #include "hw/core/cpu.h"
 #include "sysemu/dma.h"
 #include "sysemu/reset.h"
+#include "sysemu/tdvf.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
 #include "hw/qdev-properties.h"
@@ -145,6 +146,10 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
             if (size < 0) {
                 size = load_uimage_as(s->file, &entry, NULL, NULL, NULL, NULL,
                                       as);
+            }
+
+            if (size < 0) {
+                size = load_tdvf(s->file);
             }
 
             if (size < 0) {
