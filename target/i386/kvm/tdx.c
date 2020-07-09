@@ -19,6 +19,7 @@
 #include "cpu.h"
 #include "kvm_i386.h"
 #include "hw/boards.h"
+#include "hw/i386/tdvf-hob.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
 #include "standard-headers/asm-x86/kvm_para.h"
@@ -67,8 +68,26 @@ static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
 #define tdx_ioctl(ioctl_no, metadata, data) \
         _tdx_ioctl(kvm_state, ioctl_no, metadata, data)
 
+static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
+{
+    TdxFirmwareEntry *entry;
+
+    for_each_fw_entry(&tdx->fw, entry) {
+        if (entry->type == TDVF_SECTION_TYPE_TD_HOB) {
+            return entry;
+        }
+    }
+    error_report("TDVF metadata doesn't specify TD_HOB location.");
+    exit(1);
+}
+
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = TDX_GUEST(ms->cgs);
+
+    tdvf_hob_create(tdx, tdx_get_hob_entry(tdx));
+
     tdx_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
 }
 
