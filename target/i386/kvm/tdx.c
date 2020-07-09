@@ -109,6 +109,31 @@ int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
     return 0;
 }
 
+int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
+{
+    MachineState *ms = MACHINE(pcms);
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                    TYPE_TDX_GUEST);
+    int i;
+
+    if (!tdx) {
+        return -ENOSYS;
+    }
+
+    /*
+     * Sanitiy check for tdx:
+     * TDX uses generic loader to load bios instead of pflash.
+     */
+    for (i = 0; i < ARRAY_SIZE(pcms->flash); i++) {
+        if (drive_get(IF_PFLASH, 0, i)) {
+            error_report("pflash not supported by VM type, "
+                         "use -device loader,file=<path>");
+            exit(1);
+        }
+    }
+    return 0;
+}
+
 void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
                              uint32_t index, int reg, uint32_t *ret)
 {
