@@ -595,6 +595,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     TdxFirmware *tdvf = &tdx_guest->tdvf;
     TdxFirmwareEntry *entry;
+    RAMBlock *ram_block;
+    int r;
 
     tdx_init_ram_entries();
 
@@ -620,6 +622,51 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
           sizeof(TdxRamEntry), &tdx_ram_entry_compare);
 
     tdvf_hob_create(tdx_guest, tdx_get_hob_entry(tdx_guest));
+
+    for_each_tdx_fw_entry(tdvf, entry) {
+        struct kvm_memory_mapping mapping = {
+            .base_gfn = entry->address >> 12,
+            .nr_pages = entry->size >> 12,
+            .source = (__u64)entry->mem_ptr,
+        };
+
+        do {
+            r = kvm_vcpu_ioctl(first_cpu, KVM_MEMORY_MAPPING, &mapping);
+        } while (r == -EAGAIN);
+
+        if (r < 0) {
+             error_report("KVM_MEMORY_MAPPING failed %s", strerror(-r));
+             exit(1);
+        }
+
+        if (entry->attributes & TDVF_SECTION_ATTRIBUTES_MR_EXTEND) {
+            mapping = (struct kvm_memory_mapping) {
+                .base_gfn = entry->address >> 12,
+                .nr_pages = entry->size >> 12,
+            };
+
+            do {
+                r = tdx_vm_ioctl(KVM_TDX_EXTEND_MEMORY, 0, &mapping);
+            } while (r == -EAGAIN);
+            if (r < 0) {
+                error_report("KVM_TDX_EXTEND_MEMORY failed %s", strerror(-r));
+                exit(1);
+            }
+        }
+
+        if (entry->type == TDVF_SECTION_TYPE_TD_HOB ||
+            entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
+            qemu_ram_munmap(-1, entry->mem_ptr, entry->size);
+            entry->mem_ptr = NULL;
+        }
+    }
+
+    /*
+     * TDVF image has been copied into private region above via
+     * KVM_MEMORY_MAPPING. It becomes useless.
+     */
+    ram_block = tdx_guest->tdvf_mr->ram_block;
+    ram_block_discard_range(ram_block, 0, ram_block->max_length);
 }
 
 static Notifier tdx_machine_done_notify = {
