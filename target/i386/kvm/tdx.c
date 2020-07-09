@@ -85,10 +85,26 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
     TdxGuest *tdx = TDX_GUEST(ms->cgs);
+    TdxFirmwareEntry *entry;
 
     tdvf_hob_create(tdx, tdx_get_hob_entry(tdx));
 
+    for_each_fw_entry(&tdx->fw, entry) {
+        struct kvm_tdx_init_mem_region mem_region = {
+            .source_addr = (__u64)entry->mem_ptr,
+            .gpa = entry->address,
+            .nr_pages = entry->size / 4096,
+        };
+
+        __u32 metadata = entry->attributes & TDVF_SECTION_ATTRIBUTES_EXTENDMR ?
+                         KVM_TDX_MEASURE_MEMORY_REGION : 0;
+
+        tdx_ioctl(KVM_TDX_INIT_MEM_REGION, metadata, &mem_region);
+    }
+
     tdx_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
+
+    tdx->parent_obj.ready = true;
 }
 
 static Notifier tdx_machine_done_late_notify = {
@@ -301,7 +317,6 @@ static void tdx_guest_init(Object *obj)
 {
     TdxGuest *tdx = TDX_GUEST(obj);
 
-    tdx->parent_obj.ready = true;
     qemu_mutex_init(&tdx->lock);
 
     tdx->debug = false;
