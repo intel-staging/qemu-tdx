@@ -7,6 +7,11 @@ bool kvm_has_tdx(KVMState *s)
 {
         return false;
 }
+
+int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
+{
+    return -ENOSYS;
+}
 #endif
 
 void tdx_pre_create_vcpu(CPUState *cpu)
