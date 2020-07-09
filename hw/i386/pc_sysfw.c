@@ -37,6 +37,7 @@
 #include "hw/qdev-properties.h"
 #include "hw/block/flash.h"
 #include "sysemu/kvm.h"
+#include "sysemu/tdx.h"
 #include "sev.h"
 
 #define FLASH_SECTOR_SIZE 4096
@@ -220,6 +221,11 @@ void pc_system_firmware_init(PCMachineState *pcms,
     PCMachineClass *pcmc = PC_MACHINE_GET_CLASS(pcms);
     int i;
     BlockBackend *pflash_blk[ARRAY_SIZE(pcms->flash)];
+
+    if (!tdx_system_firmware_init(pcms, rom_memory)) {
+        pc_system_flash_cleanup_unused(pcms);
+        return;
+    }
 
     if (!pcmc->pci_enabled) {
         x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, true);

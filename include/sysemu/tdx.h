@@ -3,8 +3,10 @@
 
 #ifndef CONFIG_USER_ONLY
 #include "sysemu/kvm.h"
+#include "hw/i386/pc.h"
 
 bool kvm_has_tdx(KVMState *s);
+int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
 #endif
 
 void tdx_pre_create_vcpu(CPUState *cpu);
