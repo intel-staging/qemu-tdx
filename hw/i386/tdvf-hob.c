@@ -105,6 +105,9 @@ static void tdvf_hob_add_memory_resources(TdvfHob *hob)
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
         }
 
+        /* TDVF doesn't currently set this itself after TDACCEPTPAGE. */
+        attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
+
         region = tdvf_get_area(hob, sizeof(*region));
         *region = (EFI_HOB_RESOURCE_DESCRIPTOR) {
             .Header = {
