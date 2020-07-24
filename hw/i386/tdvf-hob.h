@@ -17,4 +17,9 @@ void tdvf_hob_create(TdxGuest *tdx, TdxFirmwareEntry *hob_entry);
      EFI_RESOURCE_ATTRIBUTE_INITIALIZED |       \
      EFI_RESOURCE_ATTRIBUTE_UNACCEPTED)
 
+#define EFI_RESOURCE_ATTRIBUTE_TDVF_MMIO        \
+    (EFI_RESOURCE_ATTRIBUTE_PRESENT     |       \
+     EFI_RESOURCE_ATTRIBUTE_INITIALIZED |       \
+     EFI_RESOURCE_ATTRIBUTE_UNCACHEABLE)
+
 #endif
