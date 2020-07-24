@@ -22,7 +22,10 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "e820_memory_layout.h"
+#include "hw/i386/pc.h"
 #include "hw/i386/x86.h"
+#include "hw/pci/pci_host.h"
+#include "hw/pci/pcie_host.h"
 #include "sysemu/tdx.h"
 #include "tdvf-hob.h"
 #include "uefi.h"
@@ -60,6 +63,70 @@ static void *tdvf_get_area(TdvfHob *hob, uint64_t size)
     hob->current += size;
     tdvf_align(hob, 8);
     return ret;
+}
+
+static void tdvf_hob_add_mmio_resource(TdvfHob *hob, uint64_t start,
+                                       uint64_t end)
+{
+    EFI_HOB_RESOURCE_DESCRIPTOR *region;
+
+    if (!start) {
+        return;
+    }
+
+    region = tdvf_get_area(hob, sizeof(*region));
+    *region = (EFI_HOB_RESOURCE_DESCRIPTOR) {
+        .Header = {
+            .HobType = EFI_HOB_TYPE_RESOURCE_DESCRIPTOR,
+            .HobLength = cpu_to_le16(sizeof(*region)),
+            .Reserved = cpu_to_le32(0),
+        },
+        .Owner = EFI_HOB_OWNER_ZERO,
+        .ResourceType = cpu_to_le32(EFI_RESOURCE_MEMORY_MAPPED_IO),
+        .ResourceAttribute = cpu_to_le32(EFI_RESOURCE_ATTRIBUTE_TDVF_MMIO),
+        .PhysicalStart = cpu_to_le64(start),
+        .ResourceLength = cpu_to_le64(end - start),
+    };
+}
+
+static void tdvf_hob_add_mmio_resources(TdvfHob *hob)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    X86MachineState *x86ms = X86_MACHINE(ms);
+    PCIHostState *pci_host;
+    uint64_t start, end;
+    uint64_t mcfg_base, mcfg_size;
+    Object *host;
+
+    /* Effectively PCI hole + other MMIO devices. */
+    tdvf_hob_add_mmio_resource(hob, x86ms->below_4g_mem_size,
+                               APIC_DEFAULT_ADDRESS);
+
+    /* Stolen from acpi_get_i386_pci_host(), there's gotta be an easier way. */
+    pci_host = OBJECT_CHECK(PCIHostState,
+                            object_resolve_path("/machine/i440fx", NULL),
+                            TYPE_PCI_HOST_BRIDGE);
+    if (!pci_host) {
+        pci_host = OBJECT_CHECK(PCIHostState,
+                                object_resolve_path("/machine/q35", NULL),
+                                TYPE_PCI_HOST_BRIDGE);
+    }
+    g_assert(pci_host);
+
+    host = OBJECT(pci_host);
+
+    /* PCI hole above 4gb. */
+    start = object_property_get_uint(host, PCI_HOST_PROP_PCI_HOLE64_START,
+                                     NULL);
+    end = object_property_get_uint(host, PCI_HOST_PROP_PCI_HOLE64_END, NULL);
+    tdvf_hob_add_mmio_resource(hob, start, end);
+
+    /* MMCFG region */
+    mcfg_base = object_property_get_uint(host, PCIE_HOST_MCFG_BASE, NULL);
+    mcfg_size = object_property_get_uint(host, PCIE_HOST_MCFG_SIZE, NULL);
+    if (mcfg_base && mcfg_base != PCIE_BASE_ADDR_UNMAPPED && mcfg_size) {
+        tdvf_hob_add_mmio_resource(hob, mcfg_base, mcfg_base + mcfg_size);
+    }
 }
 
 static int tdvf_e820_compare(const void *lhs_, const void* rhs_)
@@ -158,6 +225,8 @@ void tdvf_hob_create(TdxGuest *tdx, TdxFirmwareEntry *hob_entry)
     };
 
     tdvf_hob_add_memory_resources(&hob);
+
+    tdvf_hob_add_mmio_resources(&hob);
 
     last_hob = tdvf_get_area(&hob, sizeof(*last_hob));
     *last_hob =  (EFI_HOB_GENERIC_HEADER) {
