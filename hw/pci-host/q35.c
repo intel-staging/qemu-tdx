@@ -473,14 +473,14 @@ static void mch_write_config(PCIDevice *d,
 
     pci_default_write_config(d, address, val, len);
 
-    if (ranges_overlap(address, len, MCH_HOST_BRIDGE_PAM0,
-                       MCH_HOST_BRIDGE_PAM_SIZE)) {
-        mch_update_pam(mch);
-    }
-
     if (ranges_overlap(address, len, MCH_HOST_BRIDGE_PCIEXBAR,
                        MCH_HOST_BRIDGE_PCIEXBAR_SIZE)) {
         mch_update_pciexbar(mch);
+    }
+
+    if (ranges_overlap(address, len, MCH_HOST_BRIDGE_PAM0,
+                       MCH_HOST_BRIDGE_PAM_SIZE)) {
+        mch_update_pam(mch);
     }
 
     if (ranges_overlap(address, len, MCH_HOST_BRIDGE_SMRAM,
