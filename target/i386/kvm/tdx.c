@@ -22,6 +22,8 @@
 #include "hw/i386/tdvf-hob.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
+#include "qapi/qapi-commands-misc-target.h"
+#include "qapi/qapi-types-misc-target.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
@@ -37,6 +39,24 @@
 bool kvm_has_tdx(KVMState *s)
 {
     return !!(kvm_check_extension(s, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
+}
+
+TDXInfo *tdx_get_info(void)
+{
+    TDXInfo *info;
+
+    info = g_new0(TDXInfo, 1);
+    info->enabled = kvm_enabled() && kvm_tdx_enabled();
+    return info;
+}
+
+TDXCapability *tdx_get_capabilities(void)
+{
+    TDXCapability *cap;
+
+    cap = g_new0(TDXCapability, 1);
+    cap->enabled = kvm_enabled() && kvm_has_tdx(kvm_state);
+    return cap;
 }
 
 static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
@@ -369,4 +389,27 @@ static void tdx_guest_finalize(Object *obj)
 
 static void tdx_guest_class_init(ObjectClass *oc, void *data)
 {
+}
+
+/* QMP */
+TDXInfo *qmp_query_tdx(Error **errp)
+{
+    TDXInfo *info;
+
+    info = tdx_get_info();
+    if (!info) {
+        error_setg(errp, "TDX is not available.");
+    }
+    return info;
+}
+
+TDXCapability *qmp_query_tdx_capabilities(Error **errp)
+{
+    TDXCapability *cap;
+
+    cap = tdx_get_capabilities();
+    if (!cap) {
+        error_setg(errp, "TDX is not available.");
+    }
+    return cap;
 }
