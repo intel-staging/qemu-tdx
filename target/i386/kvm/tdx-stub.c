@@ -21,3 +21,8 @@ void tdx_pre_create_vcpu(CPUState *cpu)
 void tdx_post_init_vcpu(CPUState *cpu)
 {
 }
+
+struct TDXCapability *tdx_get_capabilities(void)
+{
+    return NULL;
+}
