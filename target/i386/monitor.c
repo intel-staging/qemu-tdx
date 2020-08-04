@@ -30,6 +30,7 @@
 #include "qapi/qmp/qdict.h"
 #include "sysemu/kvm.h"
 #include "sysemu/sev.h"
+#include "sysemu/tdx.h"
 #include "qapi/error.h"
 #include "sev_i386.h"
 #include "qapi/qapi-commands-misc-target.h"
@@ -762,4 +763,26 @@ SevAttestationReport *
 qmp_query_sev_attestation_report(const char *mnonce, Error **errp)
 {
     return sev_get_attestation_report(mnonce, errp);
+}
+
+TDXInfo *qmp_query_tdx(Error **errp)
+{
+    TDXInfo *info;
+
+    info = tdx_get_info();
+    if (!info) {
+        error_setg(errp, "TDX is not available.");
+    }
+    return info;
+}
+
+TDXCapability *qmp_query_tdx_capabilities(Error **errp)
+{
+    TDXCapability *cap;
+
+    cap = tdx_get_capabilities();
+    if (!cap) {
+        error_setg(errp, "TDX is not available.");
+    }
+    return cap;
 }
