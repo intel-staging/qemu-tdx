@@ -391,3 +391,62 @@
 #
 ##
 { 'command': 'query-sgx-capabilities', 'returns': 'SGXInfo', 'if': 'TARGET_I386' }
+
+##
+# @TDXInfo:
+#
+# Information about Trust Domain Extensions (TDX) support
+#
+# @enabled: true if TDX is active
+#
+##
+{ 'struct': 'TDXInfo',
+    'data': { 'enabled': 'bool' },
+  'if': 'TARGET_I386'
+}
+
+##
+# @query-tdx:
+#
+# Returns information about TDX
+#
+# Returns: @TdxInfo
+#
+#
+# Example:
+#
+# -> { "execute": "query-tdx" }
+# <- { "return": { "enabled": true } }
+#
+##
+{ 'command': 'query-tdx', 'returns': 'TDXInfo',
+  'if': 'TARGET_I386' }
+
+##
+# @TDXCapability:
+#
+# The struct describes capability for a TDX
+# feature.
+#
+##
+{ 'struct': 'TDXCapability',
+  'data': { 'enabled': 'bool' },
+  'if': 'TARGET_I386' }
+
+##
+# @query-tdx-capabilities:
+#
+# This command is used to get the TDX capabilities, and is supported on Intel
+# X86 platforms only.
+#
+# Returns: @TDXCapability.
+#
+#
+# Example:
+#
+# -> { "execute": "query-tdx-capabilities" }
+# <- { "return": { 'enabled': 'bool' }}
+#
+##
+{ 'command': 'query-tdx-capabilities', 'returns': 'TDXCapability',
+  'if': 'TARGET_I386' }
