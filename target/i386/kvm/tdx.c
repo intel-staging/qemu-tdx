@@ -22,6 +22,7 @@
 #include "hw/i386/tdvf-hob.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
+#include "qapi/qapi-types-misc-target.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
@@ -37,6 +38,21 @@
 bool kvm_has_tdx(KVMState *s)
 {
     return !!(kvm_check_extension(s, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
+}
+
+TDXCapability *tdx_get_capabilities(void)
+{
+    TDXCapability *cap;
+
+    if (!kvm_enabled() || !kvm_has_tdx(kvm_state)) {
+        return NULL;
+    }
+
+    cap = g_new0(TDXCapability, 1);
+
+    /* TODO: Determine what data actually needs to be reported. */
+    cap->shared_bit_pos = 51;
+    return cap;
 }
 
 static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,

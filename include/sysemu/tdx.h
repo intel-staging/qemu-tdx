@@ -12,4 +12,7 @@ int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
 void tdx_pre_create_vcpu(CPUState *cpu);
 void tdx_post_init_vcpu(CPUState *cpu);
 
+struct TDXCapability;
+struct TDXCapability *tdx_get_capabilities(void);
+
 #endif

@@ -323,3 +323,34 @@
 { 'command': 'query-sev-attestation-report', 'data': { 'mnonce': 'str' },
   'returns': 'SevAttestationReport',
   'if': 'defined(TARGET_I386)' }
+
+##
+# @TDXCapability:
+#
+# The struct describes capability for a TDX
+# feature.
+#
+# @shared-bit-pos: Shared bit position within the guest.
+#
+##
+{ 'struct': 'TDXCapability',
+  'data': { 'shared-bit-pos': 'int' },
+  'if': 'defined(TARGET_I386)' }
+
+##
+# @query-tdx-capabilities:
+#
+# This command is used to get the TDX capabilities, and is supported on Intel
+# X86 platforms only.
+#
+# Returns: @TDXCapability.
+#
+#
+# Example:
+#
+# -> { "execute": "query-tdx-capabilities" }
+# <- { "return": { "shared-bit-pos": true }}
+#
+##
+{ 'command': 'query-tdx-capabilities', 'returns': 'TDXCapability',
+  'if': 'defined(TARGET_I386)' }
