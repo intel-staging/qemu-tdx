@@ -30,6 +30,7 @@
 #include "qapi/qmp/qdict.h"
 #include "sysemu/kvm.h"
 #include "sysemu/sev.h"
+#include "sysemu/tdx.h"
 #include "qapi/error.h"
 #include "sev_i386.h"
 #include "qapi/qapi-commands-misc-target.h"
@@ -735,4 +736,15 @@ void qmp_sev_inject_launch_secret(const char *packet_hdr,
                                   Error **errp)
 {
     sev_inject_launch_secret(packet_hdr, secret, gpa, errp);
+}
+
+TDXCapability *qmp_query_tdx_capabilities(Error **errp)
+{
+    TDXCapability *cap;
+
+    cap = tdx_get_capabilities();
+    if (!cap) {
+        error_setg(errp, "TDX is not available");
+    }
+    return cap;
 }
