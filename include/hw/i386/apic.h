@@ -19,6 +19,7 @@ void apic_init_reset(DeviceState *s);
 void apic_sipi(DeviceState *s);
 void apic_poll_irq(DeviceState *d);
 void apic_designate_bsp(DeviceState *d, bool bsp);
+void apic_force_x2apic(DeviceState *d);
 int apic_get_highest_priority_irr(DeviceState *dev);
 
 /* pc.c */
