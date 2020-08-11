@@ -262,6 +262,15 @@ void apic_designate_bsp(DeviceState *dev, bool bsp)
     }
 }
 
+void apic_force_x2apic(DeviceState *dev)
+{
+    if (dev == NULL) {
+        return;
+    }
+
+    APIC_COMMON(dev)->force_x2apic = true;
+}
+
 static void apic_reset_common(DeviceState *dev)
 {
     APICCommonState *s = APIC_COMMON(dev);
@@ -270,6 +279,9 @@ static void apic_reset_common(DeviceState *dev)
 
     bsp = s->apicbase & MSR_IA32_APICBASE_BSP;
     s->apicbase = APIC_DEFAULT_ADDRESS | bsp | MSR_IA32_APICBASE_ENABLE;
+    if (s->force_x2apic) {
+        s->apicbase |= MSR_IA32_APICBASE_EXTD;
+    }
     s->id = s->initial_apic_id;
 
     apic_reset_irq_delivered();

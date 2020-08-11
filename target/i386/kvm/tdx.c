@@ -139,6 +139,11 @@ int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
     tdx_caps->nr_cpuid_configs = TDX1_MAX_NR_CPUID_CONFIGS;
     tdx_ioctl(KVM_TDX_CAPABILITIES, 0, tdx_caps);
 
+    if (!kvm_enable_x2apic()) {
+        error_report("Failed to enable x2apic in KVM");
+        exit(1);
+    }
+
     qemu_add_machine_init_done_late_notifier(&tdx_machine_done_late_notify);
 
     return 0;
@@ -296,6 +301,8 @@ void tdx_post_init_vcpu(CPUState *cpu)
 
     hob = tdx_get_hob_entry(tdx);
     _tdx_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
+
+    apic_force_x2apic(X86_CPU(cpu)->apic_state);
 }
 
 static bool tdx_guest_get_debug(Object *obj, Error **errp)
