@@ -264,6 +264,8 @@ static void tdx_post_init_vcpus(void)
 
     hob = tdx_get_hob_entry(tdx_guest);
     CPU_FOREACH(cpu) {
+        apic_force_x2apic(X86_CPU(cpu)->apic_state);
+
         r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
         if (r < 0) {
             error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
