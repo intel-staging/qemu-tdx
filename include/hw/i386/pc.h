@@ -44,6 +44,7 @@ typedef struct PCMachineState {
     bool sata_enabled;
     bool pit_enabled;
     bool hpet_enabled;
+    bool pic_enabled;
     bool default_bus_bypass_iommu;
     uint64_t max_fw_size;
 
@@ -62,6 +63,7 @@ typedef struct PCMachineState {
 #define PC_MACHINE_SMBUS            "smbus"
 #define PC_MACHINE_SATA             "sata"
 #define PC_MACHINE_PIT              "pit"
+#define PC_MACHINE_PIC              "pic"
 #define PC_MACHINE_MAX_FW_SIZE      "max-fw-size"
 /**
  * PCMachineClass:
