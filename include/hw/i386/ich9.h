@@ -70,6 +70,7 @@ struct ICH9LPCState {
     uint8_t smi_features_ok;          /* guest-visible, read-only; selecting it
                                        * triggers feature lockdown */
     uint64_t smi_negotiated_features; /* guest-invisible, host endian */
+    bool smm_enabled;
 
     /* isa bus */
     ISABus *isa_bus;
