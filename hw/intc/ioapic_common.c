@@ -150,6 +150,32 @@ static int ioapic_dispatch_post_load(void *opaque, int version_id)
     return 0;
 }
 
+static bool ioapic_common_get_level_trigger_unsupported(Object *obj,
+                                                        Error **errp)
+{
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+    return s->level_trigger_unsupported;
+}
+
+static void ioapic_common_set_level_trigger_unsupported(Object *obj, bool value,
+                                                       Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+    /* only disabling before realize is allowed */
+    assert(!dev->realized);
+    assert(!s->level_trigger_unsupported);
+    s->level_trigger_unsupported = value;
+}
+
+static void ioapic_common_init(Object *obj)
+{
+    object_property_add_bool(obj, "level_trigger_unsupported",
+                             ioapic_common_get_level_trigger_unsupported,
+                             ioapic_common_set_level_trigger_unsupported);
+
+}
+
 static void ioapic_common_realize(DeviceState *dev, Error **errp)
 {
     IOAPICCommonState *s = IOAPIC_COMMON(dev);
@@ -207,6 +233,7 @@ static const TypeInfo ioapic_common_type = {
     .name = TYPE_IOAPIC_COMMON,
     .parent = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(IOAPICCommonState),
+    .instance_init = ioapic_common_init,
     .class_size = sizeof(IOAPICCommonClass),
     .class_init = ioapic_common_class_init,
     .abstract = true,
