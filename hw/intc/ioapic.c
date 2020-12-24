@@ -364,6 +364,23 @@ ioapic_fix_edge_remote_irr(uint64_t *entry)
     }
 }
 
+static inline void
+ioapic_fix_level_trigger_unsupported(uint64_t *entry)
+{
+    if ((*entry & IOAPIC_LVT_TRIGGER_MODE) !=
+        IOAPIC_TRIGGER_EDGE << IOAPIC_LVT_TRIGGER_MODE_SHIFT) {
+        /*
+         * ignore a request for level trigger because
+         * level trigger requires eoi intercept to re-inject
+         * interrupt when the level is still active.
+         */
+        warn_report_once("attempting to set level-trigger mode "
+                         "while eoi intercept isn't supported");
+        *entry &= ~IOAPIC_LVT_TRIGGER_MODE;
+        *entry |= IOAPIC_TRIGGER_EDGE << IOAPIC_LVT_TRIGGER_MODE_SHIFT;
+    }
+}
+
 static void
 ioapic_mem_write(void *opaque, hwaddr addr, uint64_t val,
                  unsigned int size)
@@ -404,6 +421,9 @@ ioapic_mem_write(void *opaque, hwaddr addr, uint64_t val,
                 s->ioredtbl[index] &= IOAPIC_RW_BITS;
                 s->ioredtbl[index] |= ro_bits;
                 s->irq_eoi[index] = 0;
+                if (s->level_trigger_unsupported) {
+                    ioapic_fix_level_trigger_unsupported(&s->ioredtbl[index]);
+                }
                 ioapic_fix_edge_remote_irr(&s->ioredtbl[index]);
                 ioapic_service(s);
             }
