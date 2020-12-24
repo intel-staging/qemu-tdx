@@ -64,6 +64,7 @@ struct X86MachineState {
     unsigned apic_id_limit;
     uint16_t boot_cpus;
     unsigned smp_dies;
+    bool eoi_intercept_unsupported;
 
     OnOffAuto smm;
     OnOffAuto acpi;
