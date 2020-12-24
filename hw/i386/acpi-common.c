@@ -79,6 +79,7 @@ void acpi_build_madt(GArray *table_data, BIOSLinker *linker,
     int madt_start = table_data->len;
     AcpiDeviceIfClass *adevc = ACPI_DEVICE_IF_GET_CLASS(adev);
     bool x2apic_mode = false;
+    bool level_trigger_unsupported = x86ms->eoi_intercept_unsupported;
 
     AcpiMultipleApicTable *madt;
     AcpiMadtIoApic *io_apic;
@@ -113,26 +114,58 @@ void acpi_build_madt(GArray *table_data, BIOSLinker *linker,
         io_apic2->interrupt = cpu_to_le32(IO_APIC_SECONDARY_IRQBASE);
     }
 
-    if (x86ms->apic_xrupt_override) {
-        intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
-        intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
-        intsrcovr->length = sizeof(*intsrcovr);
-        intsrcovr->source = 0;
-        intsrcovr->gsi    = cpu_to_le32(2);
-        intsrcovr->flags  = cpu_to_le16(0); /* conforms to bus specifications */
-    }
-
-    for (i = 1; i < 16; i++) {
-        if (!(x86ms->pci_irq_mask & (1 << i))) {
-            /* No need for a INT source override structure. */
-            continue;
+    if (level_trigger_unsupported) {
+        /* Force edge trigger */
+        if (x86ms->apic_xrupt_override) {
+            intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
+            intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
+            intsrcovr->length = sizeof(*intsrcovr);
+            intsrcovr->source = 0;
+            intsrcovr->gsi    = cpu_to_le32(2);
+            intsrcovr->flags  = cpu_to_le16(1 | (1 << 2)); /* active high, edge triggered */
         }
-        intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
-        intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
-        intsrcovr->length = sizeof(*intsrcovr);
-        intsrcovr->source = i;
-        intsrcovr->gsi    = cpu_to_le32(i);
-        intsrcovr->flags  = cpu_to_le16(0xd); /* active high, level triggered */
+
+        for (i = x86ms->apic_xrupt_override ? 1 : 0; i < 16; i++) {
+            intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
+            intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
+            intsrcovr->length = sizeof(*intsrcovr);
+            intsrcovr->source = i;
+            intsrcovr->gsi    = cpu_to_le32(i);
+            intsrcovr->flags  = cpu_to_le16(1 | (1 << 2)); /* active high, edge triggered */
+        }
+
+        if (x86ms->ioapic2) {
+            for (i = 0; i < 16; i++) {
+                intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
+                intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
+                intsrcovr->length = sizeof(*intsrcovr);
+                intsrcovr->source = IO_APIC_SECONDARY_IRQBASE + i;
+                intsrcovr->gsi    = cpu_to_le32(IO_APIC_SECONDARY_IRQBASE + i);
+                intsrcovr->flags  = cpu_to_le16(1 | (1 << 2)); /* active high, edge triggered */
+            }
+        }
+    } else {
+        if (x86ms->apic_xrupt_override) {
+            intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
+            intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
+            intsrcovr->length = sizeof(*intsrcovr);
+            intsrcovr->source = 0;
+            intsrcovr->gsi    = cpu_to_le32(2);
+            intsrcovr->flags  = cpu_to_le16(0); /* conforms to bus specifications */
+        }
+
+        for (i = 1; i < 16; i++) {
+            if (!(x86ms->pci_irq_mask & (1 << i))) {
+                /* No need for a INT source override structure. */
+                continue;
+            }
+            intsrcovr = acpi_data_push(table_data, sizeof *intsrcovr);
+            intsrcovr->type   = ACPI_APIC_XRUPT_OVERRIDE;
+            intsrcovr->length = sizeof(*intsrcovr);
+            intsrcovr->source = i;
+            intsrcovr->gsi    = cpu_to_le32(i);
+            intsrcovr->flags  = cpu_to_le16(0xd); /* active high, level triggered */
+        }
     }
 
     if (x2apic_mode) {
