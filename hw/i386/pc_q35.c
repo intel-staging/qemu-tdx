@@ -267,7 +267,7 @@ static void pc_q35_init(MachineState *machine)
     }
 
     if (pcmc->pci_enabled) {
-        ioapic_init_gsi(gsi_state, "q35");
+        ioapic_init_gsi(gsi_state, "q35", x86ms->eoi_intercept_unsupported);
     }
 
     if (tcg_enabled()) {

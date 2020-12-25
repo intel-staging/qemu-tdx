@@ -175,9 +175,10 @@ static void microvm_devices_init(MicrovmMachineState *mms)
                           &error_abort);
     isa_bus_irqs(isa_bus, x86ms->gsi);
 
-    ioapic_init_gsi(gsi_state, "machine");
+    ioapic_init_gsi(gsi_state, "machine", x86ms->eoi_intercept_unsupported);
     if (ioapics > 1) {
-        x86ms->ioapic2 = ioapic_init_secondary(gsi_state);
+        x86ms->ioapic2 = ioapic_init_secondary(
+            gsi_state, x86ms->eoi_intercept_unsupported);
     }
 
     kvmclock_create(true);
