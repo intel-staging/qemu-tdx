@@ -598,7 +598,8 @@ void gsi_handler(void *opaque, int n, int level)
     }
 }
 
-void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name)
+void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
+                     bool level_trigger_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
@@ -612,6 +613,8 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name)
     }
     object_property_add_child(object_resolve_path(parent_name, NULL),
                               "ioapic", OBJECT(dev));
+    object_property_set_bool(OBJECT(dev), "level_trigger_unsupported",
+                             level_trigger_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_DEFAULT_ADDRESS);
@@ -621,13 +624,16 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name)
     }
 }
 
-DeviceState *ioapic_init_secondary(GSIState *gsi_state)
+DeviceState *ioapic_init_secondary(GSIState *gsi_state,
+                                   bool level_trigger_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
     unsigned int i;
 
     dev = qdev_new(TYPE_IOAPIC);
+    object_property_set_bool(OBJECT(dev), "level_trigger_unsupported",
+                             level_trigger_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_SECONDARY_ADDRESS);
