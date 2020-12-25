@@ -1340,6 +1340,9 @@ static int x86_kvm_type(MachineState *ms, const char *vm_type)
         kvm_type = KVM_X86_DEFAULT_VM;
     } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
         kvm_type = KVM_X86_TDX_VM;
+        X86_MACHINE(ms)->eoi_intercept_unsupported = true;
+        X86_MACHINE(ms)->smi_unsupported = true;
+        X86_MACHINE(ms)->init_sipi_unsupported = true;
     } else {
         error_report("Unknown kvm-type specified '%s'", vm_type);
         exit(1);
