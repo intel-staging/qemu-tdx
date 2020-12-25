@@ -26,6 +26,7 @@
 #include "qapi/qapi-types-misc-target.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/runstate-action.h"
 #include "sysemu/kvm.h"
 #include "sysemu/kvm_int.h"
 #include "sysemu/tdx.h"
@@ -371,6 +372,9 @@ static void tdx_guest_init(Object *obj)
     TdxGuest *tdx = TDX_GUEST(obj);
 
     qemu_mutex_init(&tdx->lock);
+
+    /* TODO: set only if user doens't specify reboot action */
+    reboot_action = REBOOT_ACTION_SHUTDOWN;
 
     tdx->debug = false;
     object_property_add_bool(obj, "debug", tdx_guest_get_debug,
