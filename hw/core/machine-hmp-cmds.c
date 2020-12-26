@@ -218,6 +218,16 @@ void hmp_pmemsave(Monitor *mon, const QDict *qdict)
     hmp_handle_error(mon, err);
 }
 
+void hmp_pmemclear(Monitor *mon, const QDict *qdict)
+{
+    uint32_t size = qdict_get_int(qdict, "size");
+    uint64_t addr = qdict_get_int(qdict, "val");
+    Error *err = NULL;
+
+    qmp_pmemclear(addr, size, &err);
+    hmp_handle_error(mon, err);
+}
+
 void hmp_system_wakeup(Monitor *mon, const QDict *qdict)
 {
     Error *err = NULL;

@@ -822,6 +822,23 @@ exit:
     fclose(f);
 }
 
+void qmp_pmemclear(int64_t addr, int64_t size, Error **errp)
+{
+    uint32_t l;
+    uint8_t buf[1024];
+
+    memset(buf, 0, sizeof(buf));
+
+    while (size != 0) {
+        l = sizeof(buf);
+        if (l > size)
+            l = size;
+        cpu_physical_memory_write(addr, buf, l);
+        addr += l;
+        size -= l;
+    }
+}
+
 void qmp_inject_nmi(Error **errp)
 {
     nmi_monitor_handle(monitor_get_cpu_index(monitor_cur()), errp);

@@ -839,6 +839,19 @@ SRST
 ERST
 
     {
+        .name       = "pmemclear",
+        .args_type  = "val:l,size:i",
+        .params     = "addr size",
+        .help       = "clear physical memory range starting at 'addr' of size 'size'",
+        .cmd        = hmp_pmemclear,
+    },
+
+SRST
+``pmemclear`` *addr* *size*
+  clear physical memory range starting at *addr* of size *size*.
+ERST
+
+    {
         .name       = "boot_set",
         .args_type  = "bootdevice:s",
         .params     = "bootdevice",

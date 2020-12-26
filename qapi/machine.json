@@ -822,6 +822,31 @@
   'data': {'val': 'int', 'size': 'int', 'filename': 'str'} }
 
 ##
+# @pmemclear:
+#
+# Clear a portion of guest physical memory to zeros.
+#
+# @val: the physical address of the guest to start from
+#
+# @size: the size of memory region to save
+#
+# Returns: Nothing on success
+#
+# Since: 7.1
+#
+# Example:
+#
+# -> { "execute": "pclear",
+#      "arguments": { "val": 10,
+#                     "size": 100 } }
+# <- { "return": {} }
+#
+##
+{ 'command': 'pmemclear',
+  'data': {'val': 'int', 'size': 'int' } }
+
+
+##
 # @Memdev:
 #
 # Information about memory backend
