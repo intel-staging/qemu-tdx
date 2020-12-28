@@ -381,6 +381,21 @@ ioapic_fix_level_trigger_unsupported(uint64_t *entry)
     }
 }
 
+static inline void
+ioapic_fix_smi_unsupported(uint64_t *entry)
+{
+    if ((*entry & IOAPIC_LVT_DELIV_MODE) ==
+        IOAPIC_DM_PMI << IOAPIC_LVT_DELIV_MODE_SHIFT) {
+        /*
+         * ignore a request for delivery mode of lowest SMI
+         */
+        warn_report_once("attempting to set delivery mode to SMI"
+                         "which is not supported");
+        *entry &= ~IOAPIC_LVT_DELIV_MODE;
+        *entry |= IOAPIC_DM_FIXED << IOAPIC_LVT_DELIV_MODE_SHIFT;
+    }
+}
+
 static void
 ioapic_mem_write(void *opaque, hwaddr addr, uint64_t val,
                  unsigned int size)
@@ -423,6 +438,9 @@ ioapic_mem_write(void *opaque, hwaddr addr, uint64_t val,
                 s->irq_eoi[index] = 0;
                 if (s->level_trigger_unsupported) {
                     ioapic_fix_level_trigger_unsupported(&s->ioredtbl[index]);
+                }
+                if (s->smi_unsupported) {
+                    ioapic_fix_smi_unsupported(&s->ioredtbl[index]);
                 }
                 ioapic_fix_edge_remote_irr(&s->ioredtbl[index]);
                 ioapic_service(s);
