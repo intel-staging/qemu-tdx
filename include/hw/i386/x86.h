@@ -65,6 +65,7 @@ struct X86MachineState {
     uint16_t boot_cpus;
     unsigned smp_dies;
     bool eoi_intercept_unsupported;
+    bool smi_unsupported;
 
     OnOffAuto smm;
     OnOffAuto acpi;
@@ -134,8 +135,10 @@ typedef struct GSIState {
 qemu_irq x86_allocate_cpu_irq(void);
 void gsi_handler(void *opaque, int n, int level);
 void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
-                     bool eoi_intercept_unsupported);
+                     bool eoi_intercept_unsupported,
+                     bool smi_unsupported);
 DeviceState *ioapic_init_secondary(GSIState *gsi_state,
-                                   bool eoi_intercept_unsupported);
+                                   bool eoi_intercept_unsupported,
+                                   bool smi_unsupported);
 
 #endif
