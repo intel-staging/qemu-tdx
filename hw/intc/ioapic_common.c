@@ -168,12 +168,32 @@ static void ioapic_common_set_level_trigger_unsupported(Object *obj, bool value,
     s->level_trigger_unsupported = value;
 }
 
+static bool ioapic_common_get_smi_unsupported(Object *obj, Error **errp)
+{
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+    return s->smi_unsupported;
+}
+
+static void ioapic_common_set_smi_unsupported(Object *obj, bool value,
+                                                       Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+    /* only disabling before realize is allowed */
+    assert(!dev->realized);
+    assert(!s->smi_unsupported);
+    s->smi_unsupported = value;
+}
+
 static void ioapic_common_init(Object *obj)
 {
     object_property_add_bool(obj, "level_trigger_unsupported",
                              ioapic_common_get_level_trigger_unsupported,
                              ioapic_common_set_level_trigger_unsupported);
 
+    object_property_add_bool(obj, "smi_unsupported",
+                             ioapic_common_get_smi_unsupported,
+                             ioapic_common_set_smi_unsupported);
 }
 
 static void ioapic_common_realize(DeviceState *dev, Error **errp)
