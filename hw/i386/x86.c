@@ -599,7 +599,8 @@ void gsi_handler(void *opaque, int n, int level)
 }
 
 void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
-                     bool level_trigger_unsupported)
+                     bool level_trigger_unsupported,
+                     bool smi_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
@@ -615,6 +616,8 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
                               "ioapic", OBJECT(dev));
     object_property_set_bool(OBJECT(dev), "level_trigger_unsupported",
                              level_trigger_unsupported, NULL);
+    object_property_set_bool(OBJECT(dev), "smi_unsupported",
+                             smi_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_DEFAULT_ADDRESS);
@@ -625,7 +628,8 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
 }
 
 DeviceState *ioapic_init_secondary(GSIState *gsi_state,
-                                   bool level_trigger_unsupported)
+                                   bool level_trigger_unsupported,
+                                   bool smi_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
@@ -634,6 +638,8 @@ DeviceState *ioapic_init_secondary(GSIState *gsi_state,
     dev = qdev_new(TYPE_IOAPIC);
     object_property_set_bool(OBJECT(dev), "level_trigger_unsupported",
                              level_trigger_unsupported, NULL);
+    object_property_set_bool(OBJECT(dev), "smi_unsupported",
+                             smi_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_SECONDARY_ADDRESS);
@@ -1351,6 +1357,7 @@ static void x86_machine_initfn(Object *obj)
     x86ms->oem_table_id = g_strndup(ACPI_BUILD_APPNAME8, 8);
     x86ms->bus_lock_ratelimit = 0;
     x86ms->eoi_intercept_unsupported = false;
+    x86ms->smi_unsupported = false;
 
     object_property_add_str(obj, "kvm-type",
                             x86_get_kvm_type, x86_set_kvm_type);
