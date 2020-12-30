@@ -1090,6 +1090,177 @@ static void build_q35_pci0_int(Aml *table, bool level_trigger_unsupported)
     aml_append(table, sb_scope);
 }
 
+static Aml *build_q35_dram_controller(void)
+{
+    /*
+     * DSDT is created with revision 1 which means 32bit integer.
+     * When the method of _CRS is called to determine MMCONFIG region,
+     * only port io is allowed to access PCI configuration space.
+     * It means qword access isn't allowed.
+     *
+     * Device(DRAC)
+     * {
+     *     Name(_HID, EisaId("PNP0C01"))
+     *     OperationRegion(DRR0, PCI_Config, 0x0000000000000060, 0x8)
+     *     Field(DRR0, DWordAcc, Lock, Preserve)
+     *     {
+     *         PEBL, 4,
+     *         PEBH, 4
+     *     }
+     *     Name(RBUF, ResourceTemplate()
+     *     {
+     *         QWordMemory(ResourceConsumer,
+     *                     PosDecode,
+     *                     MinFixed,
+     *                     MaxFixed,
+     *                     NonCacheable,
+     *                     ReadWrite,
+     *                     0x0000000000000000, // Granularity
+     *                     0x0000000000000000, // Range Minimum
+     *                     0x0000000000000000, // Range Maxium
+     *                     0x0000000000000000, // Translation Offset,
+     *                     0x0000000000000000, // Length,
+     *                     ,,
+     *                     _MCF,
+     *                     AddressRangeMemory,
+     *                     TypeStatic
+     *                     )
+     *     })
+     *     Method(_CRS, 0x0, NotSerialized)
+     *     {
+     *         CreateDWordField(RBUF, DRAC._MCF._MIN, MINL)
+     *         CreateDWordField(RBUF, DRAC._MCF._MIN + 4, MINH)
+     *         CreateDWordField(RBUF, DRAC._MCF._MAX, MAXL)
+     *         CreateDWordField(RBUF, DRAC._MCF._MAX + 4, MAXH)
+     *         CreateQWordField(RBUF, DRAC._MCF._LEN, _LEN)
+     *
+     *         Local0 = PEBL
+     *         Local1 = Local0 & 0x1  // PCIEXBAR PCIEBAREN
+     *         Local2 = Local0 & 0x6  // PCIEXBAR LENGTH
+     *         Local3 = Local0 & ~0x7 // PCIEXBAR base address low 32bit
+     *         Local4 = PEBH          // PCIEXBAR base address high 32bit
+     *         If (Local1 == 1) {
+     *             MINL = Local3
+     *             MINH = Local4
+     *             MAXL = Local3
+     *             MAXH = Local4
+     *
+     *             If (Local2 == 0) {
+     *                 _LEN = 256 * 1024 * 1024
+     *             }
+     *             If (Local2 == 0x2) {
+     *                 _LEN = 128 * 1024 * 1024
+     *             }
+     *             If (Local2 == 0x4) {
+     *                 _LEN = 64 * 1024 * 1024
+     *             }
+     *         }
+     *         return (RBUF)
+     *     }
+     * }
+     */
+
+    Aml *dev;
+    Aml *field;
+    Aml *rbuf;
+    Aml *resource_template;
+    Aml *crs;
+
+    /* DRAM controller */
+    dev = aml_device("DRAC");
+
+    aml_append(dev, aml_name_decl("_HID", aml_string("PNP0C01")));
+    /* 5.1.6 PCIEXBAR: Bus 0:Device 0:Function 0:offset 0x60 */
+    aml_append(dev, aml_operation_region("DRR0", AML_PCI_CONFIG,
+                                         aml_int(0x0000000000000060), 0x8));
+    field = aml_field("DRR0", AML_DWORD_ACC, AML_NOLOCK, AML_PRESERVE);
+    aml_append(field, aml_named_field("PEBL", 32));
+    aml_append(field, aml_named_field("PEBH", 32));
+    aml_append(dev, field);
+
+    resource_template = aml_resource_template();
+    aml_append(resource_template, aml_qword_memory(AML_POS_DECODE,
+                                                   AML_MIN_FIXED,
+                                                   AML_MAX_FIXED,
+                                                   AML_NON_CACHEABLE,
+                                                   AML_READ_WRITE,
+                                                   0x0000000000000000,
+                                                   0x0000000000000000,
+                                                   0x0000000000000000,
+                                                   0x0000000000000000,
+                                                   0x0000000000000000));
+    rbuf = aml_name_decl("RBUF", resource_template);
+    aml_append(dev, rbuf);
+
+    crs = aml_method("_CRS", 0, AML_SERIALIZED);
+    {
+        Aml *rbuf_name;
+        Aml *local0;
+        Aml *local1;
+        Aml *local2;
+        Aml *local3;
+        Aml *local4;
+        Aml *ifc;
+
+        rbuf_name = aml_name("RBUF");
+        aml_append(crs, aml_create_dword_field(rbuf_name,
+                                               aml_int(14), "MINL"));
+        aml_append(crs, aml_create_dword_field(rbuf_name,
+                                               aml_int(14 + 4), "MINH"));
+        aml_append(crs, aml_create_dword_field(rbuf_name,
+                                               aml_int(22), "MAXL"));
+        aml_append(crs, aml_create_dword_field(rbuf_name,
+                                               aml_int(22 + 4), "MAXH"));
+        aml_append(crs, aml_create_qword_field(rbuf_name,
+                                               aml_int(38), "_LEN"));
+
+        local0 = aml_local(0);
+        aml_append(crs, aml_store(aml_name("PEBL"), local0));
+        local1 = aml_local(1);
+        aml_append(crs, aml_and(local0, aml_int(0x1), local1));
+        local2 = aml_local(2);
+        aml_append(crs, aml_and(local0, aml_int(0x6), local2));
+        local3 = aml_local(3);
+        aml_append(crs, aml_and(local0, aml_int((uint32_t)~0x7), local3));
+        local4 = aml_local(4);
+        aml_append(crs, aml_store(aml_name("PEBH"), local4));
+
+        ifc = aml_if(aml_equal(local1, aml_int(0x1)));
+        {
+            Aml *_len;
+            Aml *ifc0;
+            Aml *ifc2;
+            Aml *ifc4;
+
+            aml_append(ifc, aml_store(local3, aml_name("MINL")));
+            aml_append(ifc, aml_store(local4, aml_name("MINH")));
+            aml_append(ifc, aml_store(local3, aml_name("MAXL")));
+            aml_append(ifc, aml_store(local4, aml_name("MAXH")));
+
+            _len = aml_name("_LEN");
+            ifc0 = aml_if(aml_equal(local2, aml_int(0x0)));
+            aml_append(ifc0,
+                       aml_store(aml_int(256 * 1024 * 1024), _len));
+            aml_append(ifc, ifc0);
+
+            ifc2 = aml_if(aml_equal(local2, aml_int(0x2)));
+            aml_append(ifc2,
+                       aml_store(aml_int(128 * 1024 * 1024), _len));
+            aml_append(ifc, ifc2);
+
+            ifc4 = aml_if(aml_equal(local2, aml_int(0x4)));
+            aml_append(ifc4,
+                       aml_store(aml_int(64 * 1024 * 1024), _len));
+            aml_append(ifc, ifc4);
+        }
+        aml_append(crs, ifc);
+        aml_append(crs, aml_return(rbuf_name));
+    }
+    aml_append(dev, crs);
+
+    return dev;
+}
+
 static void build_q35_isa_bridge(Aml *table)
 {
     Aml *dev;
@@ -1277,6 +1448,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
         aml_append(dev, aml_name_decl("_UID", aml_int(0)));
         aml_append(dev, build_q35_osc_method());
         aml_append(sb_scope, dev);
+        aml_append(sb_scope, build_q35_dram_controller());
 
         if (pm->smi_on_cpuhp) {
             /* reserve SMI block resources, IO ports 0xB2, 0xB3 */
