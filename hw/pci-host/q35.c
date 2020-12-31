@@ -552,8 +552,10 @@ static void mch_reset(DeviceState *qdev)
     PCIDevice *d = PCI_DEVICE(qdev);
     MCHPCIState *mch = MCH_PCI_DEVICE(d);
 
-    pci_set_quad(d->config + MCH_HOST_BRIDGE_PCIEXBAR,
-                 MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT);
+    if (!mch->txt_locked) {
+        pci_set_quad(d->config + MCH_HOST_BRIDGE_PCIEXBAR,
+                     MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT);
+    }
 
     if (mch->has_smm_ranges) {
         d->config[MCH_HOST_BRIDGE_SMRAM] = MCH_HOST_BRIDGE_SMRAM_DEFAULT;
@@ -583,7 +585,15 @@ static void mch_realize(PCIDevice *d, Error **errp)
                    mch->ext_tseg_mbytes);
         return;
     }
-
+    if (mch->txt_locked) {
+        pci_set_quad(d->config + MCH_HOST_BRIDGE_PCIEXBAR,
+                     MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT_TXT_LOCKED);
+        pci_set_quad(d->wmask + MCH_HOST_BRIDGE_PCIEXBAR, 0);
+        for (i = 0; i < MCH_HOST_BRIDGE_PAM_NB; i++) {
+            pci_set_byte(d->config + MCH_HOST_BRIDGE_PAM0 + i, 0);
+            pci_set_byte(d->wmask + MCH_HOST_BRIDGE_PAM0 + i, 0);
+        }
+    }
     /* setup pci memory mapping */
     pc_pci_as_mapping_init(OBJECT(mch), mch->system_memory,
                            mch->pci_address_space);
@@ -684,6 +694,7 @@ static Property mch_props[] = {
     DEFINE_PROP_UINT16("extended-tseg-mbytes", MCHPCIState, ext_tseg_mbytes,
                        16),
     DEFINE_PROP_BOOL("smbase-smram", MCHPCIState, has_smram_at_smbase, true),
+    DEFINE_PROP_BOOL("txt-locked", MCHPCIState, txt_locked, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 
