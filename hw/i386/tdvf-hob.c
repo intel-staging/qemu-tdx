@@ -25,6 +25,7 @@
 #include "hw/i386/pc.h"
 #include "hw/i386/x86.h"
 #include "hw/pci/pci_host.h"
+#include "hw/pci/pcie_host.h"
 #include "sysemu/tdx.h"
 #include "tdvf-hob.h"
 #include "uefi.h"
@@ -94,6 +95,7 @@ static void tdvf_hob_add_mmio_resources(TdvfHob *hob)
     X86MachineState *x86ms = X86_MACHINE(ms);
     PCIHostState *pci_host;
     uint64_t start, end;
+    uint64_t mcfg_base, mcfg_size;
     Object *host;
 
     /* Effectively PCI hole + other MMIO devices. */
@@ -117,6 +119,13 @@ static void tdvf_hob_add_mmio_resources(TdvfHob *hob)
     start = object_property_get_uint(host, PCI_HOST_PROP_PCI_HOLE64_START, NULL);
     end = object_property_get_uint(host, PCI_HOST_PROP_PCI_HOLE64_END, NULL);
     tdvf_hob_add_mmio_resource(hob, start, end);
+
+    /* MMCFG region */
+    mcfg_base = object_property_get_uint(host, PCIE_HOST_MCFG_BASE, NULL);
+    mcfg_size= object_property_get_uint(host, PCIE_HOST_MCFG_SIZE, NULL);
+    if (mcfg_base && mcfg_base != PCIE_BASE_ADDR_UNMAPPED && mcfg_size) {
+        tdvf_hob_add_mmio_resource(hob, mcfg_base, mcfg_base + mcfg_size);
+    }
 }
 
 static int tdvf_e820_compare(const void *lhs_, const void* rhs_)
