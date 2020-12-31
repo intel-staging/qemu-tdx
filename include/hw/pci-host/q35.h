@@ -51,6 +51,7 @@ struct MCHPCIState {
     MemoryRegion smbase_blackhole, smbase_window;
     bool has_smram_at_smbase;
     bool has_smm_ranges;
+    bool txt_locked;
     Range pci_hole;
     uint64_t below_4g_mem_size;
     uint64_t above_4g_mem_size;
@@ -104,6 +105,7 @@ struct Q35PCIHost {
 #define MCH_HOST_BRIDGE_PCIEXBAR               0x60    /* 64bit register */
 #define MCH_HOST_BRIDGE_PCIEXBAR_SIZE          8       /* 64bit register */
 #define MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT       0xb0000000
+#define MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT_TXT_LOCKED 0xb0000001
 #define MCH_HOST_BRIDGE_PCIEXBAR_MAX           (0x10000000) /* 256M */
 #define MCH_HOST_BRIDGE_PCIEXBAR_ADMSK         Q35_MASK(64, 35, 28)
 #define MCH_HOST_BRIDGE_PCIEXBAR_128ADMSK      ((uint64_t)(1 << 26))
