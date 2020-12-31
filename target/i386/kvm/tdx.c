@@ -31,6 +31,9 @@
 #include "sysemu/tdx.h"
 #include "tdx.h"
 
+#include "hw/southbridge/piix.h"
+#include "hw/i386/ich9.h"
+
 #define TDX1_TD_ATTRIBUTE_DEBUG BIT_ULL(0)
 #define TDX1_TD_ATTRIBUTE_PERFMON BIT_ULL(63)
 #define TDX1_MIN_TSC_FREQUENCY_KHZ (100 * 1000)
@@ -103,9 +106,26 @@ static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
 
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
+    Object *pm;
+    bool ambig;
     MachineState *ms = MACHINE(qdev_get_machine());
     TdxGuest *tdx = TDX_GUEST(ms->cgs);
     TdxFirmwareEntry *entry;
+
+    /*
+     * object look up logic is copied from acpi_get_pm_info()
+     * @ hw/ie86/acpi-build.c
+     * This property override needs to be done after machine initialization
+     * as there is no ordering of creation of objects/properties.
+     */
+    pm = object_resolve_path_type("", TYPE_PIIX4_PM, &ambig);
+    if (ambig || !pm) {
+        pm = object_resolve_path_type("", TYPE_ICH9_LPC_DEVICE, &ambig);
+    }
+    if (!ambig && pm) {
+        object_property_set_uint(pm, ACPI_PM_PROP_S3_DISABLED, 1, NULL);
+        object_property_set_uint(pm, ACPI_PM_PROP_S4_DISABLED, 1, NULL);
+    }
 
     tdvf_hob_create(tdx, tdx_get_hob_entry(tdx));
 
