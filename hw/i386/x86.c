@@ -600,7 +600,8 @@ void gsi_handler(void *opaque, int n, int level)
 
 void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
                      bool level_trigger_unsupported,
-                     bool smi_unsupported)
+                     bool smi_unsupported,
+                     bool init_sipi_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
@@ -618,6 +619,8 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
                              level_trigger_unsupported, NULL);
     object_property_set_bool(OBJECT(dev), "smi_unsupported",
                              smi_unsupported, NULL);
+    object_property_set_bool(OBJECT(dev), "init_sipi_unsupported",
+                             init_sipi_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_DEFAULT_ADDRESS);
@@ -629,7 +632,8 @@ void ioapic_init_gsi(GSIState *gsi_state, const char *parent_name,
 
 DeviceState *ioapic_init_secondary(GSIState *gsi_state,
                                    bool level_trigger_unsupported,
-                                   bool smi_unsupported)
+                                   bool smi_unsupported,
+                                   bool init_sipi_unsupported)
 {
     DeviceState *dev;
     SysBusDevice *d;
@@ -640,6 +644,8 @@ DeviceState *ioapic_init_secondary(GSIState *gsi_state,
                              level_trigger_unsupported, NULL);
     object_property_set_bool(OBJECT(dev), "smi_unsupported",
                              smi_unsupported, NULL);
+    object_property_set_bool(OBJECT(dev), "init_sipi_unsupported",
+                             init_sipi_unsupported, NULL);
     d = SYS_BUS_DEVICE(dev);
     sysbus_realize_and_unref(d, &error_fatal);
     sysbus_mmio_map(d, 0, IO_APIC_SECONDARY_ADDRESS);
@@ -1358,6 +1364,7 @@ static void x86_machine_initfn(Object *obj)
     x86ms->bus_lock_ratelimit = 0;
     x86ms->eoi_intercept_unsupported = false;
     x86ms->smi_unsupported = false;
+    x86ms->init_sipi_unsupported = false;
 
     object_property_add_str(obj, "kvm-type",
                             x86_get_kvm_type, x86_set_kvm_type);
