@@ -105,6 +105,7 @@ struct IOAPICCommonState {
     Notifier machine_done;
     bool level_trigger_unsupported;
     bool smi_unsupported;
+    bool init_sipi_unsupported;
     uint8_t version;
     uint64_t irq_count[IOAPIC_NUM_PINS];
     int irq_level[IOAPIC_NUM_PINS];
