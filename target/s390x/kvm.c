@@ -388,6 +388,9 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     }
 
     kvm_set_max_memslot_size(KVM_SLOT_MAX_BYTES);
+
+    s390_pv_init(ms->cgs, &error_fatal);
+
     return 0;
 }
 
