@@ -1191,6 +1191,14 @@ void machine_run_board_init(MachineState *machine)
 
     if (machine->cgs) {
         /*
+         * Where confidential guest support is initialized depends on
+         * the specific mechanism in use.  But, we need to make sure
+         * it's ready by now.  If it isn't, that's a bug in the
+         * implementation of that cgs mechanism.
+         */
+        assert(machine->cgs->ready);
+
+        /*
          * With confidential guests, the host can't see the real
          * contents of RAM, so there's no point in it trying to merge
          * areas.
