@@ -214,11 +214,7 @@ void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
         break;
     case KVM_CPUID_FEATURES:
         if (reg == R_EAX) {
-            *ret &= ~((1ULL << KVM_FEATURE_CLOCKSOURCE) |
-                      (1ULL << KVM_FEATURE_CLOCKSOURCE2) |
-                      (1ULL << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) |
-                      (1ULL << KVM_FEATURE_ASYNC_PF) |
-                      (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT));
+            *ret = 0;
         }
         break;
     default:
