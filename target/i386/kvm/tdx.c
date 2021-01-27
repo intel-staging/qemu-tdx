@@ -38,7 +38,7 @@ bool kvm_has_tdx(KVMState *s)
     return !!(kvm_check_extension(s, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
 }
 
-static void __tdx_ioctl(int ioctl_no, const char *ioctl_name,
+static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
                         __u32 metadata, void *data)
 {
     struct kvm_tdx_cmd tdx_cmd;
@@ -51,17 +51,21 @@ static void __tdx_ioctl(int ioctl_no, const char *ioctl_name,
     tdx_cmd.data = (__u64)(unsigned long)data;
 
     if (ioctl_no == KVM_TDX_CAPABILITIES) {
-        r = kvm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        r = kvm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+    } else if (ioctl_no == KVM_TDX_INIT_VCPU) {
+        r = kvm_vcpu_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     } else {
-        r = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     }
     if (r) {
         error_report("%s failed: %s", ioctl_name, strerror(-r));
         exit(1);
     }
 }
+#define _tdx_ioctl(cpu, ioctl_no, metadata, data) \
+        __tdx_ioctl(cpu, ioctl_no, stringify(ioctl_no), metadata, data)
 #define tdx_ioctl(ioctl_no, metadata, data) \
-        __tdx_ioctl(ioctl_no, stringify(ioctl_no), metadata, data)
+        _tdx_ioctl(kvm_state, ioctl_no, metadata, data)
 
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
@@ -217,6 +221,14 @@ void tdx_pre_create_vcpu(CPUState *cpu)
     tdx_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
 out:
     qemu_mutex_unlock(&tdx->lock);
+}
+
+void tdx_post_init_vcpu(CPUState *cpu)
+{
+    CPUX86State *env = &X86_CPU(cpu)->env;
+
+    _tdx_ioctl(cpu, KVM_TDX_INIT_VCPU, 0,
+               (void *)(unsigned long)env->regs[R_ECX]);
 }
 
 static bool tdx_guest_get_debug(Object *obj, Error **errp)

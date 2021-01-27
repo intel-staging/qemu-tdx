@@ -12,3 +12,7 @@ bool kvm_has_tdx(KVMState *s)
 void tdx_pre_create_vcpu(CPUState *cpu)
 {
 }
+
+void tdx_post_init_vcpu(CPUState *cpu)
+{
+}
