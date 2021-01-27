@@ -4384,6 +4384,14 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
 
     assert(cpu_is_stopped(cpu) || qemu_cpu_is_self(cpu));
 
+    /*
+     * level == KVM_PUT_FULL_STATE is only set by
+     * kvm_cpu_synchronize_post_init() after initialization
+     */
+    if (vm_type == KVM_X86_TDX_VM && level == KVM_PUT_FULL_STATE) {
+        tdx_post_init_vcpu(cpu);
+    }
+
     /* TODO: Allow accessing guest state for debug TDs. */
     if (vm_type == KVM_X86_TDX_VM) {
         return 0;
