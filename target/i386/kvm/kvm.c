@@ -2245,6 +2245,25 @@ static int kvm_get_supported_msrs(KVMState *s)
     if (ret >= 0) {
         int i;
 
+        /*
+         * FIXME: more sanitize for TDX
+         * TODO: introduce VM ioctl of KVM_GET_MSR_INDEX_LIST
+         */
+        if (vm_type == KVM_X86_TDX_VM && ret >= 0) {
+            __u32 nmsrs = 0;
+            for (i = 0; i < kvm_msr_list->nmsrs; i++) {
+                switch (kvm_msr_list->indices[i]) {
+                case MSR_IA32_VMX_BASIC ... MSR_IA32_VMX_VMFUNC:
+                case MSR_IA32_PERF_CAPABILITIES:
+                    continue;
+                default:
+                    kvm_msr_list->indices[nmsrs++] = kvm_msr_list->indices[i];
+                    break;
+                }
+            }
+            kvm_msr_list->nmsrs = nmsrs;
+        }
+
         for (i = 0; i < kvm_msr_list->nmsrs; i++) {
             switch (kvm_msr_list->indices[i]) {
             case MSR_STAR:
