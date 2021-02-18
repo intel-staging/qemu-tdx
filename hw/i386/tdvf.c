@@ -49,14 +49,17 @@ static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
     if (entry->address < 4 * GiB) {
         entry->mem_ptr = ram_ptr + entry->address;
     } else {
-        if (entry->address >= 4 * GiB + x86ms->above_4g_mem_size) {
-            error_report("TDVF type %u address 0x%" PRIx64 " above high memory",
-                         entry->type, entry->address);
+        if (entry->address >= 4 * GiB + x86ms->above_4g_mem_size ||
+            entry->address + entry->size >= 4 * GiB + x86ms->above_4g_mem_size) {
+            error_report("TDVF type %u address 0x%" PRIx64 " size 0x%" PRIx64
+                         " above high memory",
+                         entry->type, entry->address, entry->size);
             exit(1);
         }
         entry->mem_ptr = ram_ptr + x86ms->below_4g_mem_size +
                          entry->address - 4 * GiB;
     }
+    e820_change_type(entry->address, entry->size, E820_RESERVED);
 }
 
 static void tdvf_init_bios_memory(int fd, const char *filename,
