@@ -14,31 +14,45 @@ static size_t e820_entries;
 struct e820_table e820_reserve;
 struct e820_entry *e820_table;
 
-int e820_add_entry(uint64_t address, uint64_t length, uint32_t type)
+static int e820_append_reserve(uint64_t address, uint64_t length, uint32_t type)
 {
     int index = le32_to_cpu(e820_reserve.count);
     struct e820_entry *entry;
 
-    if (type != E820_RAM) {
-        /* old FW_CFG_E820_TABLE entry -- reservations only */
-        if (index >= E820_NR_ENTRIES) {
-            return -EBUSY;
-        }
-        entry = &e820_reserve.entry[index++];
-
-        entry->address = cpu_to_le64(address);
-        entry->length = cpu_to_le64(length);
-        entry->type = cpu_to_le32(type);
-
-        e820_reserve.count = cpu_to_le32(index);
+    /* old FW_CFG_E820_TABLE entry -- reservations only */
+    if (index >= E820_NR_ENTRIES) {
+        return -EBUSY;
     }
+    entry = &e820_reserve.entry[index++];
 
-    /* new "etc/e820" file -- include ram too */
-    e820_table = g_renew(struct e820_entry, e820_table, e820_entries + 1);
+    entry->address = cpu_to_le64(address);
+    entry->length = cpu_to_le64(length);
+    entry->type = cpu_to_le32(type);
+
+    e820_reserve.count = cpu_to_le32(index);
+    return 0;
+}
+
+static void e820_append_entry(uint64_t address, uint64_t length, uint32_t type)
+{
     e820_table[e820_entries].address = cpu_to_le64(address);
     e820_table[e820_entries].length = cpu_to_le64(length);
     e820_table[e820_entries].type = cpu_to_le32(type);
     e820_entries++;
+}
+
+int e820_add_entry(uint64_t address, uint64_t length, uint32_t type)
+{
+    if (type != E820_RAM) {
+        int ret = e820_append_reserve(address, length, type);
+        if (ret) {
+            return ret;
+        }
+    }
+
+    /* new "etc/e820" file -- include ram too */
+    e820_table = g_renew(struct e820_entry, e820_table, e820_entries + 1);
+    e820_append_entry(address, length, type);
 
     return e820_entries;
 }
