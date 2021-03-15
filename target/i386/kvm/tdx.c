@@ -29,6 +29,8 @@
 
 #define TDX1_TD_ATTRIBUTE_DEBUG BIT_ULL(0)
 #define TDX1_TD_ATTRIBUTE_PERFMON BIT_ULL(63)
+#define TDX1_MIN_TSC_FREQUENCY_KHZ (100 * 1000)
+#define TDX1_MAX_TSC_FREQUENCY_KHZ (10 * 1000 * 1000)
 
 bool kvm_has_tdx(KVMState *s)
 {
@@ -91,6 +93,19 @@ void tdx_pre_create_vcpu(CPUState *cpu)
         exit(1);
     }
 
+    if (env->tsc_khz && (env->tsc_khz < TDX1_MIN_TSC_FREQUENCY_KHZ ||
+                         env->tsc_khz > TDX1_MAX_TSC_FREQUENCY_KHZ)) {
+        error_report("Invalid TSC %ld KHz, must specify cpu_frequecy between [%d, %d] kHz\n",
+                      env->tsc_khz, TDX1_MIN_TSC_FREQUENCY_KHZ,
+                      TDX1_MAX_TSC_FREQUENCY_KHZ);
+        exit(1);
+    }
+
+    if (env->tsc_khz % (25 * 1000)) {
+        error_report("Invalid TSC %ld KHz, it must be multiple of 25MHz\n", env->tsc_khz);
+        exit(1);
+    }
+
     qemu_mutex_lock(&tdx->lock);
     if (tdx->initialized) {
         goto out;
@@ -103,6 +118,7 @@ void tdx_pre_create_vcpu(CPUState *cpu)
     cpuid_data.cpuid.padding = 0;
 
     init_vm.max_vcpus = ms->smp.cpus;
+    init_vm.tsc_khz = env->tsc_khz;
     init_vm.attributes = 0;
     init_vm.attributes |= tdx->debug ? TDX1_TD_ATTRIBUTE_DEBUG : 0;
     init_vm.attributes |= x86cpu->enable_pmu ? TDX1_TD_ATTRIBUTE_PERFMON : 0;
