@@ -792,10 +792,19 @@
 #
 # @debug: enable debug mode (default: off)
 #
+# @mrconfigid: MRCONFIGID SHA384 hex string of 48 * 2 length (default: 0)
+#
+# @mrowner: MROWNER SHA384 hex string of 48 * 2 length (default: 0)
+#
+# @mrownerconfig: MROWNERCONFIG SHA384 hex string of 48 * 2 length (default: 0)
+#
 # Since: 6.0
 ##
 { 'struct': 'TdxGuestProperties',
-  'data': { '*debug': 'bool' } }
+  'data': { '*debug': 'bool',
+            '*mrconfigid': 'str',
+            '*mrowner': 'str',
+            '*mrownerconfig': 'str' } }
 
 ##
 # @ObjectType:
