@@ -1876,6 +1876,23 @@ ObjectProperty *object_property_add_alias(Object *obj, const char *name,
 ObjectProperty *object_property_add_const_link(Object *obj, const char *name,
                                                Object *target);
 
+
+/**
+ * object_property_add_sha384:
+ * @obj: the object to add a property to
+ * @name: the name of the property
+ * @v: pointer to value
+ * @flags: bitwise-or'd ObjectPropertyFlags
+ *
+ * Add an sha384 property in memory.  This function will add a
+ * property of type 'sha384'.
+ *
+ * Returns: The newly added property on success, or %NULL on failure.
+ */
+ObjectProperty * object_property_add_sha384(Object *obj, const char *name,
+                                            const uint8_t *v,
+                                            ObjectPropertyFlags flags);
+
 /**
  * object_property_set_description:
  * @obj: the object owning the property
