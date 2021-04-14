@@ -802,6 +802,13 @@ int tdx_pre_create_vcpu(CPUState *cpu)
 
     init_vm.init_vm.attributes = tdx_guest->attributes;
 
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrconfigid) != sizeof(tdx_guest->mrconfigid));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrowner) != sizeof(tdx_guest->mrowner));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrownerconfig) != sizeof(tdx_guest->mrownerconfig));
+    memcpy(init_vm.init_vm.mrconfigid, tdx_guest->mrconfigid, sizeof(tdx_guest->mrconfigid));
+    memcpy(init_vm.init_vm.mrowner, tdx_guest->mrowner, sizeof(tdx_guest->mrowner));
+    memcpy(init_vm.init_vm.mrownerconfig, tdx_guest->mrownerconfig, sizeof(tdx_guest->mrownerconfig));
+
     do {
         r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
     } while (r == -EAGAIN);
@@ -923,6 +930,12 @@ static void tdx_guest_init(Object *obj)
     object_property_add_bool(obj, "debug",
                              tdx_guest_get_debug,
                              tdx_guest_set_debug);
+    object_property_add_sha384(obj, "mrconfigid", tdx->mrconfigid,
+                               OBJ_PROP_FLAG_READWRITE);
+    object_property_add_sha384(obj, "mrowner", tdx->mrowner,
+                               OBJ_PROP_FLAG_READWRITE);
+    object_property_add_sha384(obj, "mrownerconfig", tdx->mrownerconfig,
+                               OBJ_PROP_FLAG_READWRITE);
 }
 
 static void tdx_guest_finalize(Object *obj)
