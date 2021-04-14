@@ -282,6 +282,17 @@ void tdx_pre_create_vcpu(CPUState *cpu)
     init_vm.attributes |= tdx->debug ? TDX1_TD_ATTRIBUTE_DEBUG : 0;
     init_vm.attributes |= x86cpu->enable_pmu ? TDX1_TD_ATTRIBUTE_PERFMON : 0;
 
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrconfigid) != sizeof(tdx->mrconfigid));
+    memcpy(init_vm.mrconfigid, tdx->mrconfigid, sizeof(init_vm.mrconfigid));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrowner) != sizeof(tdx->mrowner));
+    memcpy(init_vm.mrowner, tdx->mrowner, sizeof(init_vm.mrowner));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrownerconfig) !=
+                      sizeof(tdx->mrownerconfig));
+    memcpy(init_vm.mrownerconfig, tdx->mrownerconfig,
+           sizeof(init_vm.mrownerconfig));
+
+    memset(init_vm.reserved, 0, sizeof(init_vm.reserved));
+
     init_vm.cpuid = (__u64)(&cpuid_data);
     tdx_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
 out:
@@ -336,6 +347,12 @@ static void tdx_guest_init(Object *obj)
     tdx->debug = false;
     object_property_add_bool(obj, "debug", tdx_guest_get_debug,
                              tdx_guest_set_debug);
+    object_property_add_sha384(obj, "mrconfigid", tdx->mrconfigid,
+                               OBJ_PROP_FLAG_READWRITE);
+    object_property_add_sha384(obj, "mrowner", tdx->mrowner,
+                               OBJ_PROP_FLAG_READWRITE);
+    object_property_add_sha384(obj, "mrownerconfig", tdx->mrownerconfig,
+                               OBJ_PROP_FLAG_READWRITE);
 }
 
 static void tdx_guest_finalize(Object *obj)
