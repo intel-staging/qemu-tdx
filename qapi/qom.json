@@ -888,10 +888,19 @@
 #     pages.  Some guest OS (e.g., Linux TD guest) may require this to
 #     be set, otherwise they refuse to boot.
 #
+# @mrconfigid: base64 encoded MRCONFIGID SHA384 digest
+#
+# @mrowner: base64 encoded MROWNER SHA384 digest
+#
+# @mrownerconfig: base64 MROWNERCONFIG SHA384 digest
+#
 # Since: 8.2
 ##
 { 'struct': 'TdxGuestProperties',
-  'data': { '*sept-ve-disable': 'bool' } }
+  'data': { '*sept-ve-disable': 'bool',
+            '*mrconfigid': 'str',
+            '*mrowner': 'str',
+            '*mrownerconfig': 'str' } }
 
 ##
 # @ThreadContextProperties:
