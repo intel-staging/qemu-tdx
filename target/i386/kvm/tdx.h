@@ -21,6 +21,9 @@ typedef struct TdxGuest {
 
     bool initialized;
     uint64_t attributes;    /* TD attributes */
+    uint8_t mrconfigid[48];     /* sha348 digest */
+    uint8_t mrowner[48];        /* sha348 digest */
+    uint8_t mrownerconfig[48];  /* sha348 digest */
 } TdxGuest;
 
 #ifdef CONFIG_TDX
