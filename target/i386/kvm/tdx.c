@@ -597,6 +597,14 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
             return ret;
         }
 
+        if (function == 7 && index == 0) {
+            if (reg == R_EBX) {
+                ret &= ~CPUID_7_0_EBX_SGX;
+            } else if (reg == R_ECX) {
+                ret &= ~CPUID_7_0_ECX_SGX_LC;
+            }
+        }
+
         /* configurable cpuid are supported by TDX unconditionally */
         tdx_config = tdx_get_cpuid_config(function, index, reg);
         ret |= tdx_config;
