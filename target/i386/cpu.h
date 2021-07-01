@@ -2128,6 +2128,8 @@ void x86_stl_phys_notdirty(CPUState *cs, hwaddr addr, uint32_t val);
 void x86_stw_phys(CPUState *cs, hwaddr addr, uint32_t val);
 void x86_stl_phys(CPUState *cs, hwaddr addr, uint32_t val);
 void x86_stq_phys(CPUState *cs, hwaddr addr, uint64_t val);
+uint32_t x86_ldl_phys_debug(CPUState *cs, hwaddr addr);
+uint64_t x86_ldq_phys_debug(CPUState *cs, hwaddr addr);
 #endif
 
 /* will be suppressed */
