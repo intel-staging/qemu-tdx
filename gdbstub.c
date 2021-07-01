@@ -70,9 +70,9 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
 #ifndef CONFIG_USER_ONLY
     if (phy_memory_mode) {
         if (is_write) {
-            cpu_physical_memory_write(addr, buf, len);
+            cpu_physical_memory_write_debug(addr, buf, len);
         } else {
-            cpu_physical_memory_read(addr, buf, len);
+            cpu_physical_memory_read_debug(addr, buf, len);
         }
         return 0;
     }
