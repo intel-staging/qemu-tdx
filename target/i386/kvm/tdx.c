@@ -1178,6 +1178,12 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     qemu_add_machine_init_done_notifier(&tdx_machine_done_notify);
 
     tdx_guest = tdx;
+
+    if ((tdx->attributes & TDX_TD_ATTRIBUTES_DEBUG) &&
+        kvm_vm_check_extension(kvm_state, KVM_CAP_ENCRYPT_MEMORY_DEBUG)) {
+        kvm_setup_set_memory_region_debug_ops(kvm_state,
+                                              kvm_encrypted_guest_set_memory_region_debug_ops);
+    }
     return 0;
 }
 
