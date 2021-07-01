@@ -2911,7 +2911,6 @@ MemTxResult address_space_write_ram_rom(AddressSpace *as, hwaddr addr,
     }
 }
 
-
 void cpu_flush_icache_range(hwaddr start, hwaddr len)
 {
     /*
@@ -3190,6 +3189,100 @@ void cpu_physical_memory_unmap(void *buffer, hwaddr len,
 #define RCU_READ_UNLOCK(...)     rcu_read_unlock()
 #include "memory_ldst.c.inc"
 
+inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
+                                            MemTxAttrs attrs, void *ptr,
+                                            hwaddr len)
+{
+    uint64_t val;
+    MemoryRegion *mr;
+    hwaddr l = len;
+    hwaddr addr1;
+    MemTxResult result = MEMTX_OK;
+    bool release_lock = false;
+    uint8_t *buf = ptr;
+    uint8_t *ram_ptr;
+
+    for (;;) {
+        RCU_READ_LOCK_GUARD();
+        mr = address_space_translate(as, addr, &addr1, &l, false, attrs);
+        if (!memory_access_is_direct(mr, false)) {
+            /* I/O case */
+            release_lock |= prepare_mmio_access(mr);
+            l = memory_access_size(mr, l, addr1);
+            result |= memory_region_dispatch_read(mr, addr1, &val,
+                                                  size_memop(l), attrs);
+            stn_he_p(buf, l, val);
+        } else {
+            /* RAM case */
+            fuzz_dma_read_cb(addr, l, mr);
+            ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
+            if (attrs.debug && memory_region_ram_debug_ops_read_available(mr)) {
+                if (mr->ram_debug_ops->read(buf, ram_ptr,
+                                            addr, l,
+                                            attrs) < 0)
+                    result |= MEMTX_ERROR;
+            } else {
+                memcpy(buf, ram_ptr, l);
+            }
+        }
+        if (release_lock) {
+            qemu_mutex_unlock_iothread();
+            release_lock = false;
+        }
+
+        len -= l;
+        if (!len || result != MEMTX_OK) {
+            break;
+        }
+
+        buf += l;
+        addr += l;
+        l = len;
+    }
+    return result;
+}
+
+MemTxResult address_space_write_ram_rom_debug(AddressSpace *as, hwaddr addr,
+                                              MemTxAttrs attrs,
+                                              const void *buf, hwaddr len,
+                                              bool write_rom)
+
+{
+    hwaddr l;
+    uint8_t *ram_ptr;
+    hwaddr addr1;
+    MemoryRegion *mr;
+    MemTxResult result = MEMTX_OK;
+
+    RCU_READ_LOCK_GUARD();
+    while (len > 0) {
+        l = len;
+        mr = address_space_translate(as, addr, &addr1, &l, true, attrs);
+
+        if (!(memory_region_is_ram(mr) ||
+              (memory_region_is_romd(mr) && write_rom))) {
+            l = memory_access_size(mr, l, addr1);
+        } else {
+            /* RAM/ROM case */
+            ram_ptr = qemu_map_ram_ptr(mr->ram_block, addr1);
+            if (attrs.debug && memory_region_ram_debug_ops_write_available(mr)) {
+                if (mr->ram_debug_ops->write(ram_ptr, addr, buf, l, attrs) < 0)
+                    result |= MEMTX_ERROR;
+            } else {
+                memcpy(ram_ptr, buf, l);
+            }
+            invalidate_and_set_dirty(mr, addr1, l);
+        }
+        len -= l;
+        buf += l;
+        addr += l;
+
+        if (result != MEMTX_OK)
+            break;
+    }
+    return result;
+}
+
 int64_t address_space_cache_init(MemoryRegionCache *cache,
                                  AddressSpace *as,
                                  hwaddr addr,
@@ -3376,6 +3469,16 @@ int cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
         addr += l;
     }
     return 0;
+}
+
+static const MemoryDebugOps encrypted_memory_debug_ops = {
+    .read = address_space_read_debug,
+    .write = address_space_write_ram_rom_debug,
+};
+
+void set_encrypted_memory_debug_ops(void)
+{
+    address_space_set_debug_ops(&encrypted_memory_debug_ops);
 }
 
 /*
