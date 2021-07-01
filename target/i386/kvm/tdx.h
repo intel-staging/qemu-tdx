@@ -1,6 +1,8 @@
 #ifndef QEMU_I386_TDX_H
 #define QEMU_I386_TDX_H
 
+#ifndef CONFIG_USER_ONLY
+
 #include "qom/object.h"
 #include "qapi/error.h"
 #include "exec/confidential-guest-support.h"
@@ -53,5 +55,7 @@ typedef struct TdxGuest {
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, KVMState *s, Error **errp);
 uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg);
+
+#endif
 
 #endif
