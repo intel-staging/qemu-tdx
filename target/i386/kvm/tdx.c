@@ -259,7 +259,7 @@ static struct kvm_tdx_capabilities *tdx_caps = (void *)&__tdx_caps;
 #define XCR0_MASK (MAKE_64BIT_MASK(0, 8) | BIT_ULL(9) | MAKE_64BIT_MASK(17, 2))
 #define XSS_MASK (~XCR0_MASK)
 
-int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
+int tdx_kvm_init(ConfidentialGuestSupport *cgs, KVMState *s, Error **errp)
 {
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(cgs),
                                                     TYPE_TDX_GUEST);
@@ -281,6 +281,12 @@ int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
     }
 
     qemu_add_machine_init_done_late_notifier(&tdx_machine_done_late_notify);
+
+    if (tdx->debug &&
+        kvm_vm_check_extension(s, KVM_CAP_ENCRYPT_MEMORY_DEBUG)) {
+        kvm_setup_set_memory_region_debug_ops(s,
+                                              kvm_encrypted_guest_set_memory_region_debug_ops);
+    }
 
     return 0;
 }

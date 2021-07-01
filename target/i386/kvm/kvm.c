@@ -2333,7 +2333,7 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
         return ret;
     }
 
-    ret = tdx_kvm_init(ms->cgs, &local_err);
+    ret = tdx_kvm_init(ms->cgs, s, &local_err);
     if (ret < 0) {
         error_report_err(local_err);
         return ret;
@@ -5030,4 +5030,55 @@ bool kvm_has_waitpkg(void)
 bool kvm_arch_cpu_check_are_resettable(void)
 {
     return !sev_es_enabled();
+}
+
+static int kvm_encrypted_guest_read_memory(uint8_t *dest,
+                                           const uint8_t *hva_src, hwaddr gpa_src,
+                                           uint32_t len, MemTxAttrs attrs)
+{
+    struct kvm_rw_memory rw;
+
+    if (kvm_tdx_enabled()) {
+        rw.addr = gpa_src;
+    } else if (sev_es_enabled()) {
+        rw.addr = (__u64)hva_src;
+    } else {
+        return -EINVAL;
+    }
+
+    rw.ubuf = (__u64)dest;
+    rw.len = len;
+
+    return kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_READ_MEMORY, &rw);
+}
+
+static int kvm_encrypted_guest_write_memory(uint8_t *hva_dest, hwaddr gpa_dest,
+                                            const uint8_t *src,
+                                            uint32_t len, MemTxAttrs attrs)
+{
+    struct kvm_rw_memory rw;
+
+    if (kvm_tdx_enabled()) {
+        rw.addr = gpa_dest;
+    } else if (sev_es_enabled()){
+        rw.addr = (__u64)hva_dest;
+    } else {
+        return -EINVAL;
+    }
+
+    rw.ubuf = (__u64)src;
+    rw.len = len;
+
+    return kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_WRITE_MEMORY, &rw);
+}
+
+static MemoryRegionRAMReadWriteOps kvm_encrypted_guest_mr_debug_ops = {
+    .read = kvm_encrypted_guest_read_memory,
+    .write = kvm_encrypted_guest_write_memory,
+};
+
+void kvm_encrypted_guest_set_memory_region_debug_ops(void *handle,
+                                                     MemoryRegion *mr)
+{
+    memory_region_set_ram_debug_ops(mr, &kvm_encrypted_guest_mr_debug_ops);
 }
