@@ -859,6 +859,7 @@ void tdx_pre_create_vcpu(CPUState *cpu)
 
     init_vm.cpuid = (__u64)(&cpuid_data);
     tdx_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
+
 out:
     qemu_mutex_unlock(&tdx->lock);
 }
