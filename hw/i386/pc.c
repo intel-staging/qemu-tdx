@@ -60,6 +60,7 @@
 #include "sysemu/xen.h"
 #include "sysemu/reset.h"
 #include "sysemu/runstate.h"
+#include "sysemu/tdx.h"
 #include "kvm/kvm_i386.h"
 #include "hw/xen/xen.h"
 #include "hw/xen/start_info.h"
@@ -948,6 +949,9 @@ void pc_memory_init(PCMachineState *pcms,
 
     /* Init ACPI memory hotplug IO base address */
     pcms->memhp_io_base = ACPI_MEMORY_HOTPLUG_BASE;
+
+    if (tdx_debug_enabled(machine->cgs))
+        kvm_set_memory_region_debug_ops(NULL, *ram_memory);
 }
 
 /*

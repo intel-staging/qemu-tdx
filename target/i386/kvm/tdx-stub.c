@@ -45,6 +45,11 @@ struct TDXCapability *tdx_get_capabilities(void)
     return NULL;
 }
 
+bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
+{
+    return false;
+}
+
 /* QMP */
 struct TDXCapability *tdx_get_capabilities(void)
 {
