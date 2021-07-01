@@ -47,6 +47,11 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
     return 0;
 }
 
+bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
+{
+    return false;
+}
+
 /* QMP */
 struct TDXCapability *tdx_get_capabilities(void)
 {
