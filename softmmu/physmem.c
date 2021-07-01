@@ -2946,6 +2946,19 @@ void cpu_physical_memory_rw(hwaddr addr, void *buf,
                      buf, len, is_write);
 }
 
+void cpu_physical_memory_rw_debug(hwaddr addr, void *buf,
+                            hwaddr len, bool is_write)
+{
+    if (is_write)
+        physical_memory_debug_ops->write(&address_space_memory,
+                                         addr, MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                         buf, len);
+    else
+        physical_memory_debug_ops->read(&address_space_memory,
+                                        addr, MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                        buf, len);
+}
+
 enum write_rom_type {
     WRITE_DATA,
     FLUSH_CACHE,
