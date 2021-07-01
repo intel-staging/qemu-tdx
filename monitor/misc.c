@@ -557,8 +557,9 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
             l = line_size;
         if (is_physical) {
             AddressSpace *as = cs ? cs->as : &address_space_memory;
-            MemTxResult r = address_space_read(as, addr,
-                                               MEMTXATTRS_UNSPECIFIED, buf, l);
+            MemTxResult r = address_space_read_debug(as, addr,
+                                                     MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                                     buf, l);
             if (r != MEMTX_OK) {
                 monitor_printf(mon, " Cannot access memory\n");
                 break;
@@ -795,11 +796,14 @@ static void hmp_sum(Monitor *mon, const QDict *qdict)
     uint16_t sum;
     uint32_t start = qdict_get_int(qdict, "start");
     uint32_t size = qdict_get_int(qdict, "size");
+    uint8_t val;
 
     sum = 0;
     for(addr = start; addr < (start + size); addr++) {
-        uint8_t val = address_space_ldub(&address_space_memory, addr,
-                                         MEMTXATTRS_UNSPECIFIED, NULL);
+        address_space_read_debug(&address_space_memory,
+                                 addr,
+                                 MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                 &val, sizeof(val));
         /* BSD sum algorithm ('sum' Unix command) */
         sum = (sum >> 1) | (sum << 15);
         sum += val;
