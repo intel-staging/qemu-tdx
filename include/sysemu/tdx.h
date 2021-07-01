@@ -22,4 +22,7 @@ struct TDXInfo *tdx_get_info(void);
 struct TDXCapability;
 struct TDXCapability *tdx_get_capabilities(void);
 
+struct ConfidentialGuestSupport;
+bool tdx_debug_enabled(ConfidentialGuestSupport *cgs);
+
 #endif
