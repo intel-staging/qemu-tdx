@@ -154,6 +154,8 @@ struct KVMState
     uint64_t kvm_dirty_ring_bytes;  /* Size of the per-vcpu dirty ring */
     uint32_t kvm_dirty_ring_size;   /* Number of dirty GFNs per ring */
     struct KVMDirtyRingReaper reaper;
+
+    set_memory_region_debug_ops set_mr_debug_ops;
 };
 
 KVMState *kvm_state;
@@ -3592,6 +3594,21 @@ static void kvm_set_kernel_irqchip(Object *obj, Visitor *v,
          */
         abort();
     }
+}
+
+void kvm_setup_set_memory_region_debug_ops(struct KVMState *s,
+                                       set_memory_region_debug_ops new_ops)
+{
+    if (s)
+        s->set_mr_debug_ops = new_ops;
+}
+
+void kvm_set_memory_region_debug_ops(void *handle, MemoryRegion *mr)
+{
+    if (!kvm_state || !kvm_state->set_mr_debug_ops)
+        return;
+
+    kvm_state->set_mr_debug_ops(handle, mr);
 }
 
 bool kvm_kernel_irqchip_allowed(void)
