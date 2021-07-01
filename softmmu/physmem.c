@@ -171,6 +171,18 @@ struct DirtyBitmapSnapshot {
     unsigned long dirty[];
 };
 
+static const MemoryDebugOps default_debug_ops = {
+    .read = address_space_read,
+    .write = address_space_write_ram_rom,
+};
+
+const MemoryDebugOps *physical_memory_debug_ops = &default_debug_ops;
+
+void address_space_set_debug_ops(const MemoryDebugOps *ops)
+{
+    physical_memory_debug_ops = ops;
+}
+
 static void phys_map_node_reserve(PhysPageMap *map, unsigned nodes)
 {
     static unsigned alloc_hint = 16;
@@ -2887,6 +2899,19 @@ MemTxResult address_space_write_rom(AddressSpace *as, hwaddr addr,
                                             buf, len, WRITE_DATA);
 }
 
+MemTxResult address_space_write_ram_rom(AddressSpace *as, hwaddr addr,
+                                        MemTxAttrs attrs,
+                                        const void *buf, hwaddr len,
+                                        bool write_rom)
+{
+    if (write_rom) {
+        return address_space_write_rom(as, addr, attrs, buf, len);
+    } else {
+        return address_space_write(as, addr, attrs, buf, len);
+    }
+}
+
+
 void cpu_flush_icache_range(hwaddr start, hwaddr len)
 {
     /*
@@ -3328,6 +3353,7 @@ int cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
         page = addr & TARGET_PAGE_MASK;
         phys_addr = cpu_get_phys_page_attrs_debug(cpu, page, &attrs);
         asidx = cpu_asidx_from_attrs(cpu, attrs);
+
         /* if no physical page mapped, return an error */
         if (phys_addr == -1)
             return -1;
