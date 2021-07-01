@@ -6198,3 +6198,10 @@ void kvm_encrypted_guest_set_memory_region_debug_ops(void *handle,
 {
     memory_region_set_ram_debug_ops(mr, &kvm_encrypted_guest_mr_debug_ops);
 }
+
+hwaddr kvm_encrypted_guest_mask_gpa_stolen_bit(hwaddr gpa)
+{
+    if (is_tdx_vm())
+        return tdx_remove_stolen_bit(gpa);
+    return gpa;
+}
