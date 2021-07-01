@@ -676,4 +676,30 @@ void x86_stq_phys(CPUState *cs, hwaddr addr, uint64_t val)
 
     address_space_stq(as, addr, val, attrs, NULL);
 }
+
+uint32_t x86_ldl_phys_debug(CPUState *cs, hwaddr addr)
+{
+    uint32_t ret;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED_DEBUG;
+    int as_id = cpu_asidx_from_attrs(cs, attrs);
+    struct AddressSpace *as = cpu_get_address_space(cs, as_id);
+
+    physical_memory_debug_ops->read(as, addr, attrs,
+                                    &ret, sizeof(ret));
+
+    return tswap32(ret);
+}
+
+uint64_t x86_ldq_phys_debug(CPUState *cs, hwaddr addr)
+{
+    uint64_t ret;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED_DEBUG;
+    int as_id = cpu_asidx_from_attrs(cs, attrs);
+    struct AddressSpace *as = cpu_get_address_space(cs, as_id);
+
+    physical_memory_debug_ops->read(as, addr, attrs,
+                                    &ret, sizeof(ret));
+
+    return tswap64(ret);
+}
 #endif
