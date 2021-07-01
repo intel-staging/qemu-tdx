@@ -3281,6 +3281,97 @@ void cpu_physical_memory_unmap(void *buffer, hwaddr len,
 #define RCU_READ_UNLOCK(...)     rcu_read_unlock()
 #include "memory_ldst.c.inc"
 
+inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
+                                            MemTxAttrs attrs, void *ptr,
+                                            hwaddr len)
+{
+    uint64_t val;
+    MemoryRegion *mr;
+    hwaddr l = len;
+    hwaddr addr1;
+    MemTxResult result = MEMTX_OK;
+    bool release_lock = false;
+    uint8_t *buf = ptr;
+    uint8_t *ram_ptr;
+
+    for (;;) {
+        RCU_READ_LOCK_GUARD();
+        mr = address_space_translate(as, addr, &addr1, &l, false, attrs);
+        if (!memory_access_is_direct(mr, false)) {
+            /* I/O case */
+            release_lock |= prepare_mmio_access(mr);
+            l = memory_access_size(mr, l, addr1);
+            result |= memory_region_dispatch_read(mr, addr1, &val,
+                                                  size_memop(l), attrs);
+            stn_he_p(buf, l, val);
+        } else {
+            /* RAM case */
+            fuzz_dma_read_cb(addr, l, mr);
+            ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
+            if (attrs.debug && mr->ram_debug_ops) {
+                if (mr->ram_debug_ops->read(buf, ram_ptr,
+                                            addr1, l,
+                                            attrs) < 0)
+                    memset(buf, 0, l);
+            } else {
+                memcpy(buf, ram_ptr, l);
+            }
+            result = MEMTX_OK;
+        }
+        if (release_lock) {
+            qemu_mutex_unlock_iothread();
+            release_lock = false;
+        }
+
+        len -= l;
+        buf += l;
+        addr += l;
+
+        if (!len) {
+            break;
+        }
+        l = len;
+    }
+    return result;
+}
+
+MemTxResult address_space_write_rom_debug(AddressSpace *as,
+                                          hwaddr addr,
+                                          MemTxAttrs attrs,
+                                          const void *ptr,
+                                          hwaddr len)
+{
+    hwaddr l;
+    uint8_t *ram_ptr;
+    hwaddr addr1;
+    MemoryRegion *mr;
+    const uint8_t *buf = ptr;
+
+    RCU_READ_LOCK_GUARD();
+    while (len > 0) {
+        l = len;
+        mr = address_space_translate(as, addr, &addr1, &l, true, attrs);
+
+        if (!(memory_region_is_ram(mr) ||
+              memory_region_is_romd(mr))) {
+            l = memory_access_size(mr, l, addr1);
+        } else {
+            /* ROM/RAM case */
+            ram_ptr = qemu_map_ram_ptr(mr->ram_block, addr1);
+            if (attrs.debug && mr->ram_debug_ops) {
+                mr->ram_debug_ops->write(ram_ptr, addr1, buf, l, attrs);
+            } else {
+                memcpy(ram_ptr, buf, l);
+            }
+            invalidate_and_set_dirty(mr, addr1, l);
+        }
+        len -= l;
+        buf += l;
+        addr += l;
+    }
+    return MEMTX_OK;
+}
+
 int64_t address_space_cache_init(MemoryRegionCache *cache,
                                  AddressSpace *as,
                                  hwaddr addr,
@@ -3472,6 +3563,33 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
         addr += l;
     }
     return 0;
+}
+
+static MemTxResult address_space_encrypted_memory_read_debug(AddressSpace *as,
+                                                             hwaddr addr, MemTxAttrs attrs,
+                                                             void *ptr, hwaddr len)
+{
+    attrs.debug = 1;
+    return address_space_read_debug(as, addr, attrs, ptr, len);
+}
+
+
+static MemTxResult address_space_encrypted_rom_write_debug(AddressSpace *as,
+                                                           hwaddr addr, MemTxAttrs attrs,
+                                                           const void *ptr, hwaddr len)
+{
+    attrs.debug = 1;
+    return address_space_write_rom_debug(as, addr, attrs, ptr, len);
+}
+
+static const MemoryDebugOps encrypted_memory_debug_ops = {
+    .read = address_space_encrypted_memory_read_debug,
+    .write = address_space_encrypted_rom_write_debug,
+};
+
+void set_encrypted_memory_debug_ops(void)
+{
+    address_space_set_debug_ops(&encrypted_memory_debug_ops);
 }
 
 /*
