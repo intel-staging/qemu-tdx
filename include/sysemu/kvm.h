@@ -588,4 +588,6 @@ void kvm_setup_set_memory_region_debug_ops(struct KVMState *s,
                                            set_memory_region_debug_ops new_ops);
 void kvm_set_memory_region_debug_ops(void *handle, MemoryRegion *mr);
 
+void kvm_encrypted_guest_set_memory_region_debug_ops(void *handle,
+                                                     MemoryRegion *mr);
 #endif
