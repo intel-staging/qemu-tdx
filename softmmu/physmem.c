@@ -170,6 +170,18 @@ struct DirtyBitmapSnapshot {
     unsigned long dirty[];
 };
 
+static const MemoryDebugOps default_debug_ops = {
+    .read = address_space_read,
+    .write = address_space_write_rom
+};
+
+const MemoryDebugOps *physical_memory_debug_ops = &default_debug_ops;
+
+void address_space_set_debug_ops(const MemoryDebugOps *ops)
+{
+    physical_memory_debug_ops = ops;
+}
+
 static void phys_map_node_reserve(PhysPageMap *map, unsigned nodes)
 {
     static unsigned alloc_hint = 16;
@@ -3487,6 +3499,10 @@ int cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
         page = addr & TARGET_PAGE_MASK;
         phys_addr = cpu_get_phys_page_attrs_debug(cpu, page, &attrs);
         asidx = cpu_asidx_from_attrs(cpu, attrs);
+
+        /* set debug attrs to indicate memory access is from the debugger */
+        attrs.debug = 1;
+
         /* if no physical page mapped, return an error */
         if (phys_addr == -1)
             return -1;
@@ -3495,11 +3511,13 @@ int cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
             l = len;
         phys_addr += (addr & ~TARGET_PAGE_MASK);
         if (is_write) {
-            res = address_space_write_rom(cpu->cpu_ases[asidx].as, phys_addr,
-                                          attrs, buf, l);
+            res = physical_memory_debug_ops->write(cpu->cpu_ases[asidx].as,
+                                                   phys_addr,
+                                                   attrs, buf, l);
         } else {
-            res = address_space_read(cpu->cpu_ases[asidx].as, phys_addr,
-                                     attrs, buf, l);
+            res = physical_memory_debug_ops->read(cpu->cpu_ases[asidx].as,
+                                                  phys_addr,
+                                                  attrs, buf, l);
         }
         if (res != MEMTX_OK) {
             return -1;
