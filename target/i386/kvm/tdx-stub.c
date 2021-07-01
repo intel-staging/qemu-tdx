@@ -28,3 +28,13 @@ void tdx_apply_xfam_dependencies(CPUState *cpu)
 void tdx_check_minus_features(CPUState *cpu)
 {
 }
+
+bool tdx_debug_enabled(void)
+{
+    return false;
+}
+
+bool tdx_debug_enabled(void)
+{
+    return false;
+}

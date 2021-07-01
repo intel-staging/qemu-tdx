@@ -1858,3 +1858,11 @@ void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
         break;
     }
 }
+
+bool tdx_debug_enabled(void)
+{
+    if (!is_tdx_vm())
+        return false;
+
+    return tdx_guest->attributes & TDX_TD_ATTRIBUTES_DEBUG;
+}

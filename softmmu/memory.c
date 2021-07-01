@@ -1567,6 +1567,14 @@ void memory_region_init_ram_nomigrate(MemoryRegion *mr,
     memory_region_init_ram_flags_nomigrate(mr, owner, name, size, 0, errp);
 }
 
+static void memory_region_init_ram_debug_ops(MemoryRegion *mr)
+{
+    if (!mr || !mr->ram)
+        return;
+
+    kvm_set_memory_region_debug_ops(NULL, mr);
+}
+
 void memory_region_init_ram_flags_nomigrate(MemoryRegion *mr,
                                             Object *owner,
                                             const char *name,
@@ -1585,6 +1593,8 @@ void memory_region_init_ram_flags_nomigrate(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_resizeable_ram(MemoryRegion *mr,
@@ -1609,6 +1619,8 @@ void memory_region_init_resizeable_ram(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 #ifdef CONFIG_POSIX
@@ -1637,6 +1649,8 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_ram_from_fd(MemoryRegion *mr,
@@ -1660,6 +1674,8 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_set_gmem_fd(MemoryRegion *mr, int fd)
@@ -1686,6 +1702,8 @@ void memory_region_init_ram_ptr(MemoryRegion *mr,
     /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
     assert(ptr != NULL);
     mr->ram_block = qemu_ram_alloc_from_ptr(size, ptr, mr, &error_fatal);
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_ram_device_ptr(MemoryRegion *mr,
@@ -1705,6 +1723,8 @@ void memory_region_init_ram_device_ptr(MemoryRegion *mr,
     /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
     assert(ptr != NULL);
     mr->ram_block = qemu_ram_alloc_from_ptr(size, ptr, mr, &error_fatal);
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_alias(MemoryRegion *mr,
