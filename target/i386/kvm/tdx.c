@@ -1867,3 +1867,23 @@ bool tdx_debug_enabled(void)
 
     return tdx_guest->attributes & TDX_TD_ATTRIBUTES_DEBUG;
 }
+
+static hwaddr tdx_gpa_stolen_mask(void)
+{
+    X86CPU *x86_cpu = X86_CPU(first_cpu);
+
+    if (!x86_cpu || !x86_cpu->phys_bits)
+        return 0ULL;
+
+    if (x86_cpu->phys_bits > 48)
+            return 1ULL << 51;
+        else
+            return 1ULL << 47;
+}
+
+hwaddr tdx_remove_stolen_bit(hwaddr gpa)
+{
+    if (!is_tdx_vm())
+        return gpa;
+    return gpa & ~tdx_gpa_stolen_mask();
+}
