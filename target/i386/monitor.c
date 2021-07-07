@@ -759,13 +759,24 @@ void qmp_sev_inject_launch_secret(const char *packet_hdr,
     sev_inject_launch_secret(packet_hdr, secret, gpa, errp);
 }
 
+TDXInfo *qmp_query_tdx(Error **errp)
+{
+    TDXInfo *info;
+
+    info = tdx_get_info();
+    if (!info) {
+        error_setg(errp, "TDX is not available.");
+    }
+    return info;
+}
+
 TDXCapability *qmp_query_tdx_capabilities(Error **errp)
 {
     TDXCapability *cap;
 
     cap = tdx_get_capabilities();
     if (!cap) {
-        error_setg(errp, "TDX is not available");
+        error_setg(errp, "TDX is not available.");
     }
     return cap;
 }
