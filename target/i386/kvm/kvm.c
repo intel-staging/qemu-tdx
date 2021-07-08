@@ -248,6 +248,11 @@ bool kvm_has_smm(void)
     return kvm_vm_check_extension(kvm_state, KVM_CAP_X86_SMM);
 }
 
+bool kvm_has_pam(void)
+{
+    return true;
+}
+
 bool kvm_has_adjust_clock_stable(void)
 {
     int ret = kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK);
