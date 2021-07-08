@@ -37,6 +37,7 @@ uint32_t kvm_x86_arch_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
 #endif  /* CONFIG_KVM */
 
 bool kvm_has_smm(void);
+bool kvm_has_pam(void);
 bool kvm_has_adjust_clock(void);
 bool kvm_has_adjust_clock_stable(void);
 bool kvm_has_exception_payload(void);

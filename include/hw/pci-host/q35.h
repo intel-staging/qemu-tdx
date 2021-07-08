@@ -51,6 +51,7 @@ struct MCHPCIState {
     MemoryRegion smbase_blackhole, smbase_window;
     bool has_smram_at_smbase;
     bool has_smm_ranges;
+    bool has_pam_memory_area;
     bool txt_locked;
     Range pci_hole;
     uint64_t below_4g_mem_size;
