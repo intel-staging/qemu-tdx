@@ -286,6 +286,35 @@
 { 'command': 'query-gic-capabilities', 'returns': ['GICCapability'],
   'if': 'defined(TARGET_ARM)' }
 
+##
+# @TDXInfo:
+#
+# Information about Trust Domain Extensions (TDX) support
+#
+# @enabled: true if TDX is active
+#
+##
+{ 'struct': 'TDXInfo',
+    'data': { 'enabled': 'bool' },
+  'if': 'defined(TARGET_I386)'
+}
+
+##
+# @query-tdx:
+#
+# Returns information about TDX
+#
+# Returns: @TdxInfo
+#
+#
+# Example:
+#
+# -> { "execute": "query-tdx" }
+# <- { "return": { "enabled": true } }
+#
+##
+{ 'command': 'query-tdx', 'returns': 'TDXInfo',
+  'if': 'defined(TARGET_I386)' }
 
 ##
 # @TDXCapability:
@@ -293,11 +322,11 @@
 # The struct describes capability for a TDX
 # feature.
 #
-# @shared-bit-pos: Shared bit position within the guest.
+# @enabled: true if KVM supports TDX
 #
 ##
 { 'struct': 'TDXCapability',
-  'data': { 'shared-bit-pos': 'int' },
+  'data': { 'enabled': 'bool' },
   'if': 'defined(TARGET_I386)' }
 
 ##
@@ -312,7 +341,7 @@
 # Example:
 #
 # -> { "execute": "query-tdx-capabilities" }
-# <- { "return": { "shared-bit-pos": true }}
+# <- { "return": { "enabled": true }}
 #
 ##
 { 'command': 'query-tdx-capabilities', 'returns': 'TDXCapability',

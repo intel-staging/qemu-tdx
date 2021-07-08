@@ -48,8 +48,9 @@ bool kvm_has_tdx(KVMState *s)
 TDXInfo *tdx_get_info(void)
 {
     TDXInfo *info;
+
     info = g_new0(TDXInfo, 1);
-    info->enabled = kvm_tdx_enabled();
+    info->enabled = kvm_enabled() && kvm_tdx_enabled();
     return info;
 }
 
