@@ -1233,6 +1233,49 @@ static void x86_machine_set_acpi(Object *obj, Visitor *v, const char *name,
     visit_type_OnOffAuto(v, name, &x86ms->acpi, errp);
 }
 
+bool x86_machine_is_pam_enabled(const X86MachineState *x86ms)
+{
+    bool pam_available = false;
+
+    if (x86ms->pam == ON_OFF_AUTO_OFF) {
+        return false;
+    }
+
+    if (tcg_enabled() || qtest_enabled()) {
+        pam_available = true;
+    } else if (kvm_enabled()) {
+        pam_available = kvm_has_pam();
+    }
+
+    if (pam_available) {
+        return true;
+    }
+
+    if (x86ms->pam == ON_OFF_AUTO_ON) {
+        error_report("Programmable Attribute Map(PAM) Memory Area not supported "
+                     "by this hypervisor.");
+        exit(1);
+    }
+    return false;
+}
+
+static void x86_machine_get_pam(Object *obj, Visitor *v, const char *name,
+                               void *opaque, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+    OnOffAuto pam = x86ms->pam;
+
+    visit_type_OnOffAuto(v, name, &pam, errp);
+}
+
+static void x86_machine_set_pam(Object *obj, Visitor *v, const char *name,
+                               void *opaque, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+
+    visit_type_OnOffAuto(v, name, &x86ms->pam, errp);
+}
+
 static char *x86_machine_get_oem_id(Object *obj, Error **errp)
 {
     X86MachineState *x86ms = X86_MACHINE(obj);
@@ -1400,6 +1443,12 @@ static void x86_machine_class_init(ObjectClass *oc, void *data)
         NULL, NULL);
     object_class_property_set_description(oc, X86_MACHINE_ACPI,
         "Enable ACPI");
+
+    object_class_property_add(oc, X86_MACHINE_PAM, "OnOffAuto",
+        x86_machine_get_pam, x86_machine_set_pam,
+        NULL, NULL);
+    object_class_property_set_description(oc, X86_MACHINE_PAM,
+        "Enable PAM");
 
     object_class_property_add_str(oc, X86_MACHINE_OEM_ID,
                                   x86_machine_get_oem_id,
