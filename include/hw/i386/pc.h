@@ -163,6 +163,7 @@ void pc_acpi_smi_interrupt(void *opaque, int irq, int level);
 #define PCI_HOST_BELOW_4G_MEM_SIZE     "below-4g-mem-size"
 #define PCI_HOST_ABOVE_4G_MEM_SIZE     "above-4g-mem-size"
 #define PCI_HOST_PROP_SMM_RANGES       "smm-ranges"
+#define PCI_HOST_PROP_PAM_MEMORY_AREA  "pam-memory-area"
 
 typedef enum {
     SEV_DESC_TYPE_UNDEF,
