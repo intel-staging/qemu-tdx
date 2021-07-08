@@ -19,6 +19,11 @@ bool kvm_has_smm(void)
     return 1;
 }
 
+bool kvm_has_pam(void)
+{
+    return true;
+}
+
 bool kvm_enable_x2apic(void)
 {
     return false;
