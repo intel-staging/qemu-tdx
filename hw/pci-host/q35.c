@@ -188,6 +188,8 @@ static Property q35_host_props[] = {
                      mch.above_4g_mem_size, 0),
     DEFINE_PROP_BOOL(PCI_HOST_PROP_SMM_RANGES, Q35PCIHost,
                      mch.has_smm_ranges, true),
+    DEFINE_PROP_BOOL(PCI_HOST_PROP_PAM_MEMORY_AREA, Q35PCIHost,
+                     mch.has_pam_memory_area, true),
     DEFINE_PROP_BOOL("x-pci-hole64-fix", Q35PCIHost, pci_hole64_fix, true),
     DEFINE_PROP_END_OF_LIST(),
 };
@@ -481,9 +483,11 @@ static void mch_write_config(PCIDevice *d,
         mch_update_pciexbar(mch);
     }
 
-    if (ranges_overlap(address, len, MCH_HOST_BRIDGE_PAM0,
-                       MCH_HOST_BRIDGE_PAM_SIZE)) {
-        mch_update_pam(mch);
+    if (mch->has_pam_memory_area) {
+        if (ranges_overlap(address, len, MCH_HOST_BRIDGE_PAM0,
+                           MCH_HOST_BRIDGE_PAM_SIZE)) {
+            mch_update_pam(mch);
+        }
     }
 
     if (!mch->has_smm_ranges) {
@@ -509,7 +513,9 @@ static void mch_update(MCHPCIState *mch)
 {
     mch_update_pciexbar(mch);
 
-    mch_update_pam(mch);
+    if (mch->has_pam_memory_area) {
+        mch_update_pam(mch);
+    }
     if (mch->has_smm_ranges) {
         mch_update_smram(mch);
         mch_update_ext_tseg_mbytes(mch);
@@ -551,10 +557,17 @@ static void mch_reset(DeviceState *qdev)
 {
     PCIDevice *d = PCI_DEVICE(qdev);
     MCHPCIState *mch = MCH_PCI_DEVICE(d);
+    int i;
 
     if (!mch->txt_locked) {
         pci_set_quad(d->config + MCH_HOST_BRIDGE_PCIEXBAR,
                      MCH_HOST_BRIDGE_PCIEXBAR_DEFAULT);
+    }
+
+    if (mch->has_pam_memory_area) {
+        for (i = 0; i < MCH_HOST_BRIDGE_PAM_NB; i++) {
+            pci_set_byte(d->config + MCH_HOST_BRIDGE_PAM0 + i, 0);
+        }
     }
 
     if (mch->has_smm_ranges) {
@@ -599,13 +612,20 @@ static void mch_realize(PCIDevice *d, Error **errp)
                            mch->pci_address_space);
 
     /* PAM */
-    init_pam(DEVICE(mch), mch->ram_memory, mch->system_memory,
-             mch->pci_address_space, &mch->pam_regions[0],
-             PAM_BIOS_BASE, PAM_BIOS_SIZE);
-    for (i = 0; i < ARRAY_SIZE(mch->pam_regions) - 1; ++i) {
+    if (mch->has_pam_memory_area) {
         init_pam(DEVICE(mch), mch->ram_memory, mch->system_memory,
-                 mch->pci_address_space, &mch->pam_regions[i+1],
-                 PAM_EXPAN_BASE + i * PAM_EXPAN_SIZE, PAM_EXPAN_SIZE);
+                 mch->pci_address_space, &mch->pam_regions[0],
+                 PAM_BIOS_BASE, PAM_BIOS_SIZE);
+        for (i = 0; i < ARRAY_SIZE(mch->pam_regions) - 1; ++i) {
+            init_pam(DEVICE(mch), mch->ram_memory, mch->system_memory,
+                     mch->pci_address_space, &mch->pam_regions[i+1],
+                     PAM_EXPAN_BASE + i * PAM_EXPAN_SIZE, PAM_EXPAN_SIZE);
+        }
+    } else {
+        /* disallow to configure PAM */
+        for (i = 0; i < MCH_HOST_BRIDGE_PAM_NB; i++) {
+            pci_set_byte(d->wmask + MCH_HOST_BRIDGE_PAM0 + i, 0);
+        }
     }
 
     if (!mch->has_smm_ranges) {
