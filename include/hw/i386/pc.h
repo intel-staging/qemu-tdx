@@ -154,6 +154,7 @@ void pc_guest_info_init(PCMachineState *pcms);
 #define PCI_HOST_BELOW_4G_MEM_SIZE     "below-4g-mem-size"
 #define PCI_HOST_ABOVE_4G_MEM_SIZE     "above-4g-mem-size"
 #define PCI_HOST_PROP_SMM_RANGES       "smm-ranges"
+#define PCI_HOST_PROP_PAM_MEMORY_AREA  "pam-memory-area"
 
 
 void pc_pci_as_mapping_init(Object *owner, MemoryRegion *system_memory,
