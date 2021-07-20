@@ -4433,6 +4433,20 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
 
     /* TODO: Allow accessing guest state for debug TDs. */
     if (vm_type == KVM_X86_TDX_VM) {
+        CPUX86State *env = &x86_cpu->env;
+        MachineState *ms = MACHINE(qdev_get_machine());
+        TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                        TYPE_TDX_GUEST);
+        /*
+         * Inject exception to TD guest is NOT allowed.
+         * Now KVM has workaround to emulate
+         * #BP injection to support GDB stub feature.
+         */
+        if (tdx && tdx->debug &&
+            (env->exception_pending == 1) &&
+            (env->exception_nr == 3))
+            return kvm_put_vcpu_events(x86_cpu, level);
+
         return 0;
     }
 
