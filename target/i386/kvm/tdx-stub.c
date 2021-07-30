@@ -35,6 +35,11 @@ void tdx_check_plus_minus_features(CPUState *cpu)
 {
 }
 
+uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
+{
+    return 0;
+}
+
 struct TDXCapability *tdx_get_capabilities(void)
 {
     return NULL;

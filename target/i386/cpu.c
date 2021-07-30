@@ -4999,7 +4999,8 @@ CpuDefinitionInfoList *qmp_query_cpu_definitions(Error **errp)
 }
 
 uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
-                                            bool migratable_only)
+                                            bool migratable_only,
+                                            bool is_tdx)
 {
     FeatureWordInfo *wi = &feature_word_info[w];
     uint64_t r = 0;
@@ -5007,9 +5008,14 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
     if (kvm_enabled()) {
         switch (wi->type) {
         case CPUID_FEATURE_WORD:
-            r = kvm_arch_get_supported_cpuid(kvm_state, wi->cpuid.eax,
-                                                        wi->cpuid.ecx,
-                                                        wi->cpuid.reg);
+            if (is_tdx && kvm_tdx_enabled()) {
+                r = tdx_get_supported_cpuid(wi->cpuid.eax, wi->cpuid.ecx,
+                                            wi->cpuid.reg);
+            } else {
+                r = kvm_arch_get_supported_cpuid(kvm_state, wi->cpuid.eax,
+                                                 wi->cpuid.ecx,
+                                                 wi->cpuid.reg);
+            }
             break;
         case MSR_FEATURE_WORD:
             r = kvm_arch_get_supported_msr_feature(kvm_state,
@@ -6197,7 +6203,7 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
              * by the user.
              */
             env->features[w] |=
-                x86_cpu_get_supported_feature_word(w, cpu->migratable) &
+                x86_cpu_get_supported_feature_word(w, cpu->migratable, false) &
                 ~env->user_minus_features[w] &
                 ~feature_word_info[w].no_autoenable_flags;
         }
@@ -6320,13 +6326,14 @@ static void x86_cpu_filter_features(X86CPU *cpu, bool verbose)
 
     if (verbose) {
         prefix = accel_uses_host_cpuid()
-                 ? "host doesn't support requested feature"
+                 ? (kvm_tdx_enabled() ? "TDX doesn't support requested feature" :
+                 "Host doesn't support requested feature")
                  : "TCG doesn't support requested feature";
     }
 
     for (w = 0; w < FEATURE_WORDS; w++) {
         uint64_t host_feat =
-            x86_cpu_get_supported_feature_word(w, false);
+            x86_cpu_get_supported_feature_word(w, false, true);
         uint64_t requested_features = env->features[w];
         uint64_t unavailable_features = requested_features & ~host_feat;
         mark_unsuitable_features(cpu, w, unavailable_features, prefix, true);
