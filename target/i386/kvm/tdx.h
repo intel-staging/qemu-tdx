@@ -13,6 +13,7 @@
 
 #define TYPE_TDX_GUEST "tdx-guest"
 #define TDX_GUEST(obj)  OBJECT_CHECK(TdxGuest, (obj), TYPE_TDX_GUEST)
+#define TDX_PHYS_ADDR_BITS  52
 
 typedef struct TdxGuestClass {
     ConfidentialGuestSupportClass parent_class;
