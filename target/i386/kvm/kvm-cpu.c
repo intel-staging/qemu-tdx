@@ -13,6 +13,7 @@
 #include "kvm-cpu.h"
 #include "qapi/error.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/tdx.h"
 #include "hw/boards.h"
 
 #include "kvm_i386.h"
@@ -163,7 +164,7 @@ static void kvm_cpu_instance_init(CPUState *cs)
 
     if (xcc->model) {
         /* only applies to builtin_x86_defs cpus */
-        if (!kvm_irqchip_in_kernel()) {
+        if (!kvm_irqchip_in_kernel() && !kvm_tdx_enabled()) {
             x86_cpu_change_kvm_default("x2apic", "off");
         } else if (kvm_irqchip_is_split() && kvm_enable_x2apic()) {
             x86_cpu_change_kvm_default("kvm-msi-ext-dest-id", "on");
