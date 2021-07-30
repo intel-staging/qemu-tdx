@@ -52,7 +52,6 @@ typedef struct TdxGuest {
 } TdxGuest;
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp);
-uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg);
 uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg);
 
 #endif
