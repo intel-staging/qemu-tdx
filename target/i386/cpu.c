@@ -5124,10 +5124,12 @@ static void x86_cpu_load_model(X86CPU *cpu, X86CPUModel *model)
 
     /*
      * Properties in versioned CPU model are not user specified features.
-     * We can simply clear env->user_features here since it will be filled later
-     * in x86_cpu_expand_features() based on plus_features and minus_features.
+     * We can simply clear env->user_{plus/minus}_features here since it will
+     * be filled later in x86_cpu_expand_features() based on plus_features and
+     * minus_features.
      */
-    memset(&env->user_features, 0, sizeof(env->user_features));
+    memset(&env->user_plus_features, 0, sizeof(env->user_plus_features));
+    memset(&env->user_minus_features, 0, sizeof(env->user_minus_features));
 }
 
 static gchar *x86_gdb_arch_name(CPUState *cs)
@@ -6175,7 +6177,7 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
              */
             env->features[w] |=
                 x86_cpu_get_supported_feature_word(w, cpu->migratable) &
-                ~env->user_features[w] &
+                ~env->user_minus_features[w] &
                 ~feature_word_info[w].no_autoenable_flags;
         }
     }
@@ -6187,7 +6189,7 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
 
             /* Not an error unless the dependent feature was added explicitly.  */
             mark_unavailable_features(cpu, d->to.index,
-                                      unavailable_features & env->user_features[d->to.index],
+                                      unavailable_features & env->user_plus_features[d->to.index],
                                       "This feature depends on other features that were not requested");
 
             env->features[d->to.index] &= ~unavailable_features;
@@ -6619,12 +6621,18 @@ static void x86_cpu_set_bit_prop(Object *obj, Visitor *v, const char *name,
         return;
     }
 
+    /*
+     * As minus has precedence over plus, if the features exists both
+     * in user_plus_features and user_minus_features, the minus has
+     * the precedence.
+     */
     if (value) {
         cpu->env.features[fp->w] |= fp->mask;
+        cpu->env.user_plus_features[fp->w] |= fp->mask;
     } else {
         cpu->env.features[fp->w] &= ~fp->mask;
+        cpu->env.user_minus_features[fp->w] |= fp->mask;
     }
-    cpu->env.user_features[fp->w] |= fp->mask;
 }
 
 /* Register a boolean property to get/set a single bit in a uint32_t field.
