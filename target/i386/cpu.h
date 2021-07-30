@@ -1894,7 +1894,8 @@ void cpu_clear_ignne(void);
 void cpu_sync_bndcs_hflags(CPUX86State *env);
 
 uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
-                                            bool migratable_only);
+                                            bool migratable_only,
+                                            bool is_tdx);
 
 /* this function must always be used to load data in the segment
    cache: it synchronizes the hflags with the segment cache values */

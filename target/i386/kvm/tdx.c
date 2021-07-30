@@ -712,7 +712,7 @@ void tdx_check_plus_minus_features(CPUState *cpu)
             bit_mask = (1ULL << i);
             /* user minus take precedence over user plus */
             if (bit_mask & minus_features) {
-                if (!(x86_cpu_get_supported_feature_word(w, false) & bit_mask)) {
+                if (!(x86_cpu_get_supported_feature_word(w, false, false) & bit_mask)) {
                     continue;
                 }
 
@@ -742,7 +742,7 @@ void tdx_check_plus_minus_features(CPUState *cpu)
                 mark_unsuitable_features(x86_cpu, w,
                                          bit_mask & minus_features, prefix, false);
             } else if (bit_mask & plus_features) {
-                if (x86_cpu_get_supported_feature_word(w, false) & bit_mask) {
+                if (x86_cpu_get_supported_feature_word(w, false, false) & bit_mask) {
                     continue;
                 }
 
