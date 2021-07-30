@@ -381,12 +381,18 @@ FeatureMask tdx_xfam_feature_delegate[] = {
     [XSTATE_XTILE_DATA_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_BF16 },
 };
 
+#define ATTRIBUTE_MAX_BITS      64
+
+static FeatureMask attribute_features[ATTRIBUTE_MAX_BITS] = {
+    [30] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_PKS },
+};
+
 uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
 {
     struct kvm_tdx_cpuid_config *cpuid_c;
     int i;
     uint32_t ret = 0;
-    uint32_t eax, ebx, ecx, edx, native, xfam_fixed;
+    uint32_t eax, ebx, ecx, edx, native, xfam_fixed, attrs_fixed;
     FeatureWord w;
 
     if (function == KVM_CPUID_FEATURES && reg == R_EAX) {
@@ -398,6 +404,9 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
 
     xfam_fixed = (uint32_t)tdx_caps->xfam_fixed1 |
                 ~(uint32_t)tdx_caps->xfam_fixed0;
+
+    attrs_fixed = (uint32_t)tdx_caps->attrs_fixed1 |
+                 ~(uint32_t)tdx_caps->attrs_fixed0;
 
     if (function == 0xd && index == 0x0 && reg == R_EAX) {
         return (XCR0_MASK & ~xfam_fixed) & eax;
@@ -443,6 +452,13 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
                     ret |= (d->mask & native);
                 }
             }
+            /* Add TD Attributes-allowed configurable features */
+            for (i = 0; i < ARRAY_SIZE(attribute_features); i++) {
+                FeatureMask *d = &attribute_features[i];
+                if (d->index == w && !(attrs_fixed & (1ULL << i))) {
+                    ret |= (d->mask & native);
+                }
+            }
             break;
         }
     }
@@ -483,7 +499,7 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
     MachineState *ms = MACHINE(qdev_get_machine());
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
-    uint32_t eax, ebx, ecx, edx, tdx_config;
+    uint32_t eax, ebx, ecx, edx, tdx_config, i;
     uint32_t ret = 0;
     FeatureWord w;
 
@@ -540,6 +556,18 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
         /* enforce "fixed" type CPUID virtualization */
         ret |= tdx_cpuid_lookup[w].tdx_fixed1;
         ret &= ~tdx_cpuid_lookup[w].tdx_fixed0;
+
+        /* tdx_cap->attrs_fixed check */
+        for (i = 0; i < 64; ++i) {
+            if (attribute_features[i].index == w) {
+                if (tdx_caps->attrs_fixed1 & (1 << i)) {
+                    ret |= attribute_features[i].mask;
+                }
+                if (~tdx_caps->attrs_fixed0 & (1 << i)) {
+                    ret &= ~attribute_features[i].mask;
+                }
+            }
+        }
 
         return ret;
     }
