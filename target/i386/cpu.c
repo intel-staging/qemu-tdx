@@ -4089,6 +4089,113 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         },
     },
     {
+	.name = "TDX-SapphireRapids",
+	.level = 0x21,
+	.vendor = CPUID_VENDOR_INTEL,
+	.family = 6,
+	.model = 143,
+	.stepping = 4,
+	.features[FEAT_1_EDX] =
+	     /* CPUID_CONFIG: CPUID_ACPI CPUID_HT CPUID_TM CPUID_PBE */
+	    CPUID_FP87 | CPUID_VME | CPUID_DE | CPUID_PSE | CPUID_TSC |
+	    CPUID_MSR | CPUID_PAE | CPUID_MCE | CPUID_CX8 | CPUID_APIC |
+	    CPUID_SEP | CPUID_MTRR | CPUID_PGE | CPUID_MCA | CPUID_CMOV |
+	    CPUID_PAT | CPUID_PSE36 | CPUID_CLFLUSH | CPUID_DTS |
+	    CPUID_MMX | CPUID_FXSR | CPUID_SSE |
+	    CPUID_SSE2 | CPUID_SS,
+	.features[FEAT_1_ECX] =
+	    /*
+	     * CPUID_CONFIG: CPUID_EXT_EST CPUID_EXT_TM2 CPUID_EXT_XTPR
+	     * XFAM: CPUID_EXT_FMA CPUID_EXT_AVX CPUID_EXT_F16C
+	     */
+	    CPUID_EXT_SSE3 | CPUID_EXT_PCLMULQDQ | CPUID_EXT_DTES64 |
+	    CPUID_EXT_DSCPL | CPUID_EXT_SSSE3 | CPUID_EXT_FMA |
+	    CPUID_EXT_CX16 | CPUID_EXT_PDCM | CPUID_EXT_PCID |
+	    CPUID_EXT_SSE41 | CPUID_EXT_SSE42 | CPUID_EXT_X2APIC |
+	    CPUID_EXT_MOVBE | CPUID_EXT_POPCNT |
+	    CPUID_EXT_TSC_DEADLINE_TIMER | CPUID_EXT_AES |
+	    CPUID_EXT_XSAVE | CPUID_EXT_AVX | CPUID_EXT_F16C |
+	    CPUID_EXT_RDRAND,
+	.features[FEAT_8000_0001_EDX] =
+	    CPUID_EXT2_SYSCALL | CPUID_EXT2_NX | CPUID_EXT2_PDPE1GB |
+	    CPUID_EXT2_RDTSCP | CPUID_EXT2_LM,
+	.features[FEAT_8000_0001_ECX] =
+	    CPUID_EXT3_LAHF_LM | CPUID_EXT3_ABM | CPUID_EXT3_3DNOWPREFETCH,
+	.features[FEAT_7_0_EBX] =
+	    /*
+	     * CPUID_CONFIG: CPUID_7_0_EBX_BMI1 CPUID_7_0_EBX_BMI2
+	     *               CPUID_7_0_EBX_PQM CPUID_7_0_EBX_CQE
+         *               CPUID_7_0_EBX_ADX
+	     * XFAM: CPUID_7_0_EBX_AVX2 CPUID_7_0_EBX_AVX512F
+	     *       CPUID_7_0_EBX_AVX512DQ CPUID_7_0_EBX_AVX512IFMA
+	     *       CPUID_7_0_EBX_INTEL_PT CPUID_7_0_EBX_AVX512CD
+	     *       CPUID_7_0_EBX_AVX512BW CPUID_7_0_EBX_AVX512VL
+	     *
+	     *       CPUID_7_0_EBX_AVX512PF CPUID_7_0_EBX_AVX512ER not
+	     *       supported on SPR-D
+	     */
+	    CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_BMI1 |
+	    CPUID_7_0_EBX_HLE | CPUID_7_0_EBX_AVX2 |
+	    CPUID_7_0_EBX_SMEP | CPUID_7_0_EBX_BMI2 |
+	    CPUID_7_0_EBX_ERMS | CPUID_7_0_EBX_INVPCID |
+	    CPUID_7_0_EBX_RTM | CPUID_7_0_EBX_AVX512F |
+	    CPUID_7_0_EBX_AVX512DQ | CPUID_7_0_EBX_RDSEED |
+	    CPUID_7_0_EBX_ADX | CPUID_7_0_EBX_SMAP |
+	    CPUID_7_0_EBX_AVX512IFMA | CPUID_7_0_EBX_CLFLUSHOPT |
+	    CPUID_7_0_EBX_CLWB | CPUID_7_0_EBX_AVX512CD |
+	    CPUID_7_0_EBX_SHA_NI | CPUID_7_0_EBX_AVX512BW |
+	    CPUID_7_0_EBX_AVX512VL,
+	.features[FEAT_7_0_ECX] =
+	    /*
+	     * CPUID_CONFIG: CPUID_7_0_ECX_WAITPKG CPUID_7_0_ECX_TME
+	     * XFAM: CPUID_7_0_ECX_AVX512_VBMI CPUID_7_0_ECX_PKU
+	     *        CPUID_7_0_ECX_AVX512_VBMI2 CPUID_7_0_ECX_CET_SHSTK
+	     *        CPUID_7_0_ECX_VAES CPUID_7_0_ECX_VPCLMULQDQ
+	     *        CPUID_7_0_ECX_AVX512VNNI CPUID_7_0_ECX_AVX512BITALG
+	     *        CPUID_7_0_ECX_AVX512_VPOPCNTDQ
+	     * ATTRIBUTE: CPUID_7_0_ECX_PKS
+	     */
+	    CPUID_7_0_ECX_AVX512_VBMI | CPUID_7_0_ECX_UMIP | CPUID_7_0_ECX_PKU |
+	    CPUID_7_0_ECX_WAITPKG | CPUID_7_0_ECX_AVX512_VBMI2 |
+	    CPUID_7_0_ECX_GFNI | CPUID_7_0_ECX_VAES |
+	    CPUID_7_0_ECX_VPCLMULQDQ | CPUID_7_0_ECX_AVX512VNNI |
+	    CPUID_7_0_ECX_AVX512BITALG | CPUID_7_0_ECX_AVX512_VPOPCNTDQ |
+	    CPUID_7_0_ECX_LA57 | CPUID_7_0_ECX_RDPID |
+	    CPUID_7_0_ECX_BUS_LOCK_DETECT | CPUID_7_0_ECX_CLDEMOTE |
+	    CPUID_7_0_ECX_MOVDIRI | CPUID_7_0_ECX_MOVDIR64B,
+	.features[FEAT_7_0_EDX] =
+	     /*
+	     * XFAM: CPUID_7_0_EDX_ULI CPUID_7_0_EDX_ARCH_LBR
+	     *       CPUID_7_0_EDX_AVX512_VP2INTERSECT
+	     *       CPUID_7_0_EDX_AMX_BF16 CPUID_7_0_EDX_CET_IBT
+	     *       CPUID_7_0_EDX_AMX_INT8 CPUID_7_0_EDX_AMX_TILE
+	     *
+	     *
+	     * CPUID_7_0_EDX_AVX512_4VNNIW  CPUID_7_0_EDX_AVX512_4FMAPS
+	     * not supported
+	     */
+	    CPUID_7_0_EDX_FSRM | CPUID_7_0_EDX_SERIALIZE |
+	    CPUID_7_0_EDX_TSX_LDTRK | CPUID_7_0_EDX_AMX_BF16 |
+	    CPUID_7_0_EDX_AVX512_FP16 | CPUID_7_0_EDX_AMX_TILE |
+	    CPUID_7_0_EDX_AMX_INT8  | CPUID_7_0_EDX_SPEC_CTRL |
+	    CPUID_7_0_EDX_STIBP | CPUID_7_0_EDX_ARCH_CAPABILITIES |
+	    CPUID_7_0_EDX_CORE_CAPABILITY | CPUID_7_0_EDX_SPEC_CTRL_SSBD,
+	.features[FEAT_XSAVE] =
+	    /*
+	     * XFAM: CPUID_XSAVE_XFD depend on all of XFAM[]
+	     */
+	    CPUID_XSAVE_XSAVEOPT | CPUID_XSAVE_XSAVEC |
+	    CPUID_XSAVE_XGETBV1 | CPUID_XSAVE_XSAVES,
+	.features[FEAT_6_EAX] =
+	    CPUID_6_EAX_ARAT,
+	.features[FEAT_KVM] = (1ULL << KVM_FEATURE_NOP_IO_DELAY) |
+	    (1ULL << KVM_FEATURE_PV_UNHALT) | (1ULL << KVM_FEATURE_PV_TLB_FLUSH) |
+	    (1ULL << KVM_FEATURE_PV_SEND_IPI) | (1ULL << KVM_FEATURE_POLL_CONTROL) |
+	    (1ULL << KVM_FEATURE_PV_SCHED_YIELD) | (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID),
+	.xlevel = 0x80000008,
+	.model_id = "Genuine Intel(R) CPU",
+    },
+    {
         .name = "Denverton",
         .level = 21,
         .vendor = CPUID_VENDOR_INTEL,
@@ -7385,6 +7492,16 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
         if (cpu->phys_bits == 0) {
             cpu->phys_bits = TCG_PHYS_ADDR_BITS;
         }
+#ifndef CONFIG_USER_ONLY
+        if (is_tdx_vm()) {
+            /*
+             * Some CPUID bits can't be reflected in env->features[],
+             * but they still have restrictions in TDX VM.
+             * e.g. physical address bits is fixed to 0x34.
+             */
+            cpu->phys_bits = TDX_PHYS_ADDR_BITS;
+        }
+#endif
     } else {
         /* For 32 bit systems don't use the user set value, but keep
          * phys_bits consistent with what we tell the guest.

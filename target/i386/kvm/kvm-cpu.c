@@ -14,6 +14,7 @@
 #include "qapi/error.h"
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
+#include "tdx.h"
 
 #include "tdx.h"
 #include "kvm_i386.h"
@@ -182,7 +183,9 @@ static void kvm_cpu_instance_init(CPUState *cs)
         }
 
         /* Special cases not set in the X86CPUDefinition structs: */
-        x86_cpu_apply_props(cpu, kvm_default_props);
+        if (!is_tdx_vm()) {
+            x86_cpu_apply_props(cpu, kvm_default_props);
+        }
     }
 
     if (cpu->max_features) {
