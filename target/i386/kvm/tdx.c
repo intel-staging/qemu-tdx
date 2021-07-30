@@ -254,7 +254,7 @@ static Notifier tdx_machine_done_late_notify = {
 
 static struct kvm_tdx_capabilities *tdx_caps = NULL;
 
-#define XCR0_MASK (MAKE_64BIT_MASK(0, 8) | BIT_ULL(9))
+#define XCR0_MASK (MAKE_64BIT_MASK(0, 8) | BIT_ULL(9) | MAKE_64BIT_MASK(17, 2))
 #define XSS_MASK (~XCR0_MASK)
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
@@ -318,12 +318,84 @@ int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
     return 0;
 }
 
+static FeatureDep xfam_dependencies[] = {
+    /* XFAM[7:5] may be set to 111 only when XFAM[2] is set to 1 */
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_YMM_MASK },
+        .to = { FEAT_XSAVE_COMP_LO, XSTATE_AVX_512_MASK },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_YMM_MASK },
+        .to = { FEAT_1_ECX,
+                CPUID_EXT_FMA | CPUID_EXT_AVX |
+                CPUID_EXT_F16C },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_YMM_MASK },
+        .to = { FEAT_7_0_EBX, CPUID_7_0_EBX_AVX2 },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_YMM_MASK },
+        .to = { FEAT_7_0_ECX, CPUID_7_0_ECX_VAES | CPUID_7_0_ECX_VPCLMULQDQ},
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_AVX_512_MASK },
+        .to = { FEAT_7_0_EBX,
+                CPUID_7_0_EBX_AVX512F | CPUID_7_0_EBX_AVX512DQ |
+                CPUID_7_0_EBX_AVX512IFMA | CPUID_7_0_EBX_AVX512PF |
+                CPUID_7_0_EBX_AVX512ER | CPUID_7_0_EBX_AVX512CD |
+                CPUID_7_0_EBX_AVX512BW | CPUID_7_0_EBX_AVX512VL },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_AVX_512_MASK },
+        .to = { FEAT_7_0_ECX,
+                CPUID_7_0_ECX_AVX512_VBMI | CPUID_7_0_ECX_AVX512_VBMI2 |
+                CPUID_7_0_ECX_AVX512VNNI | CPUID_7_0_ECX_AVX512BITALG |
+                CPUID_7_0_ECX_AVX512_VPOPCNTDQ },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_AVX_512_MASK },
+        .to = { FEAT_7_0_EDX,
+                CPUID_7_0_EDX_AVX512_4VNNIW | CPUID_7_0_EDX_AVX512_4FMAPS |
+                CPUID_7_0_EDX_AVX512_VP2INTERSECT | CPUID_7_0_EDX_AVX512_FP16 },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_AVX_512_MASK },
+        .to = { FEAT_7_1_EAX, CPUID_7_1_EAX_AVX512_BF16 | CPUID_7_1_EAX_AVX_VNNI },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_PKRU_MASK },
+        .to = { FEAT_7_0_ECX, CPUID_7_0_ECX_PKU },
+    },
+    {
+        .from = { FEAT_XSAVE_COMP_LO, XSTATE_AMX_MASK },
+        .to = { FEAT_7_0_EDX, CPUID_7_0_EDX_AMX_BF16 | CPUID_7_0_EDX_AMX_TILE |
+                CPUID_7_0_EDX_AMX_INT8}
+    },
+    /* TODO: XSS features */
+};
+
+/*
+ * Select a delegate feature for each XFAM-allowed features. e.g avx for all XFAM[2].
+ * Only the delegate one is allowed to be configured. This can help prevent unintentional
+ * mistake by the user.
+ */
+FeatureMask tdx_xfam_feature_delegate[] = {
+    [XSTATE_YMM_BIT] = { .index = FEAT_1_ECX, .mask = CPUID_EXT_AVX },
+    [XSTATE_OPMASK_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_ZMM_Hi256_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_Hi16_ZMM_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_PKRU_BIT] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_PKU },
+    [XSTATE_XTILE_CFG_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_BF16 },
+    [XSTATE_XTILE_DATA_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_BF16 },
+};
+
 uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
 {
     struct kvm_tdx_cpuid_config *cpuid_c;
     int i;
     uint32_t ret = 0;
-    uint32_t eax, ebx, ecx, edx;
+    uint32_t eax, ebx, ecx, edx, native, xfam_fixed;
     FeatureWord w;
 
     if (function == KVM_CPUID_FEATURES && reg == R_EAX) {
@@ -333,9 +405,11 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
     /* Check if native supports */
     host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
 
-    /* TODO: AMX in XCR0 is not yet configurable */
+    xfam_fixed = (uint32_t)tdx_caps->xfam_fixed1 |
+                ~(uint32_t)tdx_caps->xfam_fixed0;
+
     if (function == 0xd && index == 0x0 && reg == R_EAX) {
-        return XCR0_MASK & eax;
+        return (XCR0_MASK & ~xfam_fixed) & eax;
     }
 
     /*
@@ -351,26 +425,34 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
         }
 
         if (f->cpuid.eax == function && f->cpuid.reg == reg &&
-            (!f->cpuid.needs_ecx || f->cpuid.ecx == index) &&
-            tdx_cpuid_lookup[w].faulting) {
+            (!f->cpuid.needs_ecx || f->cpuid.ecx == index)) {
             switch (reg) {
             case R_EAX:
-                ret |= eax;
+                native = eax;
                 break;
             case R_EBX:
-                ret |= ebx;
+                native = ebx;
                 break;
             case R_ECX:
-                ret |= ecx;
+                native = ecx;
                 break;
             case R_EDX:
-                ret |= edx;
+                native = edx;
                 break;
             default:
                 return 0;
             }
-
-            return ret;
+            if (tdx_cpuid_lookup[w].faulting) {
+                return native;
+            }
+            /* Add XFAM-allowed configurable features */
+            for (i = 0; i < ARRAY_SIZE(tdx_xfam_feature_delegate); i++) {
+                FeatureMask *d = &tdx_xfam_feature_delegate[i];
+                if (d->index == w && !(xfam_fixed & (1ULL << i))) {
+                    ret |= (d->mask & native);
+                }
+            }
+            break;
         }
     }
 
@@ -472,6 +554,34 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
     }
 
     return ret;
+}
+
+void tdx_update_xfam_features(CPUState *cpu)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    X86CPU *x86_cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86_cpu->env;
+    int i;
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                    TYPE_TDX_GUEST);
+
+    if (!tdx) {
+        return;
+    }
+
+    for (i = 0; i < ARRAY_SIZE(xfam_dependencies); i++) {
+        FeatureDep *d = &xfam_dependencies[i];
+        if (!(env->features[d->from.index] & d->from.mask)) {
+            uint64_t unavailable_features = env->features[d->to.index] & d->to.mask;
+
+            /* Not an error unless the dependent feature was added explicitly */
+            mark_unsuitable_features(x86_cpu, d->to.index,
+                                     unavailable_features & env->user_plus_features[d->to.index],
+                                     "This feature depends on unrequested XFAM feature",
+                                     true);
+            env->features[d->to.index] &= ~unavailable_features;
+        }
+    }
 }
 
 void tdx_pre_create_vcpu(CPUState *cpu)
