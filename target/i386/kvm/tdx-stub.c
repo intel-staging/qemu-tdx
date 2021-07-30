@@ -27,6 +27,10 @@ struct TDXInfo *tdx_get_info(void)
     return NULL;
 }
 
+void tdx_update_xfam_features(CPUState *cpu)
+{
+}
+
 struct TDXCapability *tdx_get_capabilities(void)
 {
     return NULL;

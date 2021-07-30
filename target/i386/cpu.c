@@ -26,6 +26,7 @@
 #include "tcg/helper-tcg.h"
 #include "sysemu/reset.h"
 #include "sysemu/hvf.h"
+#include "sysemu/tdx.h"
 #include "kvm/kvm_i386.h"
 #include "sev.h"
 #include "qapi/error.h"
@@ -1260,15 +1261,6 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
         .tcg_features = TCG_SGX_12_1_EAX_FEATURES,
     },
 };
-
-typedef struct FeatureMask {
-    FeatureWord index;
-    uint64_t mask;
-} FeatureMask;
-
-typedef struct FeatureDep {
-    FeatureMask from, to;
-} FeatureDep;
 
 static FeatureDep feature_dependencies[] = {
     {
@@ -6282,6 +6274,9 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
 
     if (kvm_enabled()) {
         kvm_hyperv_expand_features(cpu, errp);
+    }
+    if (kvm_tdx_enabled()) {
+        tdx_update_xfam_features(CPU(cpu));
     }
 }
 

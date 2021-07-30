@@ -557,6 +557,11 @@ typedef enum X86Seg {
 #define XSTATE_XTILE_CFG_MASK           (1ULL << XSTATE_XTILE_CFG_BIT)
 #define XSTATE_XTILE_DATA_MASK          (1ULL << XSTATE_XTILE_DATA_BIT)
 
+#define XSTATE_AVX_512_MASK             (XSTATE_OPMASK_MASK |       \
+                                         XSTATE_ZMM_Hi256_MASK |    \
+                                         XSTATE_Hi16_ZMM_MASK)
+#define XSTATE_AMX_MASK                 (XSTATE_XTILE_CFG_MASK |    \
+                                         XSTATE_XTILE_DATA_MASK)
 #define XSTATE_DYNAMIC_MASK             (XSTATE_XTILE_DATA_MASK)
 
 #define ESA_FEATURE_ALIGN64_BIT         1
@@ -564,7 +569,6 @@ typedef enum X86Seg {
 
 #define ESA_FEATURE_ALIGN64_MASK        (1U << ESA_FEATURE_ALIGN64_BIT)
 #define ESA_FEATURE_XFD_MASK            (1U << ESA_FEATURE_XFD_BIT)
-
 
 /* CPUID feature words */
 typedef enum FeatureWord {
@@ -866,10 +870,14 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_0_EDX_SERIALIZE         (1U << 14)
 /* TSX Suspend Load Address Tracking instruction */
 #define CPUID_7_0_EDX_TSX_LDTRK         (1U << 16)
+/* Intel AMX BF16 Support */
+#define CPUID_7_0_EDX_AMX_BF16          (1U << 22)
 /* AVX512_FP16 instruction */
 #define CPUID_7_0_EDX_AVX512_FP16       (1U << 23)
 /* AMX tile (two-dimensional register) */
 #define CPUID_7_0_EDX_AMX_TILE          (1U << 24)
+/* Intel AMX INT8 Support */
+#define CPUID_7_0_EDX_AMX_INT8          (1U << 25)
 /* Speculation Control */
 #define CPUID_7_0_EDX_SPEC_CTRL         (1U << 26)
 /* Single Thread Indirect Branch Predictors */
