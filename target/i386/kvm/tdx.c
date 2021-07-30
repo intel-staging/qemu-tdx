@@ -643,6 +643,139 @@ void tdx_update_xfam_features(CPUState *cpu)
     }
 }
 
+static inline uint64_t is_tdx_xfam_feature(FeatureWord w, uint64_t bit_mask) {
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(xfam_dependencies); i++) {
+        FeatureDep *d = &xfam_dependencies[i];
+        if (w == d->to.index && bit_mask & d->to.mask) {
+            return d->from.mask;
+        }
+    }
+    return 0;
+}
+
+static inline int is_tdx_xfam_delegate_feature(FeatureWord w, uint64_t bit_mask) {
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(tdx_xfam_feature_delegate); i++) {
+        FeatureMask *d = &tdx_xfam_feature_delegate[i];
+        if (w == d->index && bit_mask & d->mask) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static const char *tdx_xfam_delegate_feature_name(uint64_t xfam_mask) {
+    uint32_t xfam_delegate_index, xfam_delegate_feature;
+    int bitnr, xfam_delegate_bitnr;
+    const char *name;
+
+    bitnr = ctz32(xfam_mask);
+    xfam_delegate_index = tdx_xfam_feature_delegate[bitnr].index;
+    xfam_delegate_feature = tdx_xfam_feature_delegate[bitnr].mask;
+    xfam_delegate_bitnr = ctz32(xfam_delegate_feature);
+    /* get XFAM feature delegate feature name */
+    name = feature_word_info[xfam_delegate_index].feat_names[xfam_delegate_bitnr];
+    assert(xfam_delegate_bitnr < 32 ||
+           !(name && feature_word_info[xfam_delegate_index].type == CPUID_FEATURE_WORD));
+    return name;
+}
+
+void tdx_check_plus_minus_features(CPUState *cpu)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    uint64_t minus_features, plus_features, bit_mask, feature_mask;
+    X86CPU *x86_cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86_cpu->env;
+    FeatureWordInfo *wi;
+    FeatureWord w;
+    int i, delegate_index;
+    char prefix[80];
+    TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
+                                                    TYPE_TDX_GUEST);
+
+    if (!tdx) {
+        return;
+    }
+
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        minus_features = env->user_minus_features[w];
+        plus_features = env->user_plus_features[w];
+        wi = &feature_word_info[w];
+
+        if (wi->type == MSR_FEATURE_WORD)
+            continue;
+
+        for (i = 0; i < 64; ++i) {
+            bit_mask = (1ULL << i);
+            /* user minus take precedence over user plus */
+            if (bit_mask & minus_features) {
+                if (!(x86_cpu_get_supported_feature_word(w, false) & bit_mask)) {
+                    continue;
+                }
+
+                if (bit_mask & tdx_get_cpuid_config(wi->cpuid.eax, wi->cpuid.ecx,
+                                                wi->cpuid.reg)) {
+                    continue;
+                }
+
+                feature_mask = is_tdx_xfam_feature(w, bit_mask);
+                delegate_index = is_tdx_xfam_delegate_feature(w, bit_mask);
+                if (feature_mask && delegate_index >= 0) {
+                    continue;
+                }
+
+                if (feature_mask && delegate_index < 0) {
+                    /* disallowed non-delegate xfam-allowed features' prefix */
+                    snprintf(prefix, sizeof(prefix),
+                        "TDX: modify the XFAM-allowed delegate feature(%s) instead of",
+                        g_strdup(tdx_xfam_delegate_feature_name(feature_mask)));
+                } else {
+                    /* disallowed normal features' prefix */
+                    strncpy(prefix,
+                        "This feature can't be removed due to TDX limitation",
+                        sizeof(prefix));
+                }
+
+                mark_unsuitable_features(x86_cpu, w,
+                                         bit_mask & minus_features, prefix, false);
+            } else if (bit_mask & plus_features) {
+                if (x86_cpu_get_supported_feature_word(w, false) & bit_mask) {
+                    continue;
+                }
+
+                if (bit_mask & tdx_get_cpuid_config(wi->cpuid.eax, wi->cpuid.ecx,
+                                                wi->cpuid.reg)) {
+                    continue;
+                }
+
+                feature_mask = is_tdx_xfam_feature(w, bit_mask);
+                delegate_index = is_tdx_xfam_delegate_feature(w, bit_mask);
+                if (feature_mask && delegate_index >= 0) {
+                    continue;
+                }
+
+                if (feature_mask && delegate_index < 0) {
+                    /* disallowed non-delegate xfam-allowed features' prefix */
+                    snprintf(prefix, sizeof(prefix),
+                        "TDX: modify the XFAM-allowed delegate feature(%s) instead of",
+                        g_strdup(tdx_xfam_delegate_feature_name(feature_mask)));
+                } else {
+                    /* disallowed normal features' prefix */
+                    strncpy(prefix,
+                        "This feature can't be added due to TDX limitation",
+                        sizeof(prefix));
+                }
+
+                mark_unsuitable_features(x86_cpu, w,
+                                      bit_mask & minus_features, prefix, true);
+            }
+        }
+    }
+}
+
 void tdx_pre_create_vcpu(CPUState *cpu)
 {
     struct {
