@@ -79,6 +79,13 @@
             (1ULL << KVM_FEATURE_ASYNC_PF) | \
             (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT))
 
+/* Some KVM PV features are treated as configurable */
+#define TDX_CONFIG_KVM_FEATURES ((1ULL << KVM_FEATURE_NOP_IO_DELAY) | \
+            (1ULL << KVM_FEATURE_PV_EOI) | (1ULL << KVM_FEATURE_PV_UNHALT) | \
+            (1ULL << KVM_FEATURE_PV_TLB_FLUSH) | (1ULL << KVM_FEATURE_PV_SEND_IPI) | \
+            (1ULL << KVM_FEATURE_POLL_CONTROL) | (1ULL << KVM_FEATURE_PV_SCHED_YIELD) | \
+            (1ULL << KVM_FEATURE_ASYNC_PF_INT) | (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID))
+
 typedef struct kvm_tdx_cpuid_lookup {
   uint64_t tdx_fixed0;
   uint64_t tdx_fixed1;
@@ -301,50 +308,162 @@ int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
     return 0;
 }
 
-void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
-                             uint32_t index, int reg, uint32_t *ret)
+extern FeatureWordInfo feature_word_info[FEATURE_WORDS];
+
+uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
+{
+    struct kvm_tdx_cpuid_config *cpuid_c;
+    int i;
+    uint32_t ret = 0;
+    uint32_t eax, ebx, ecx, edx;
+    FeatureWord w;
+
+    if (function == KVM_CPUID_FEATURES && reg == R_EAX) {
+        return TDX_CONFIG_KVM_FEATURES;
+    }
+
+    /* Check if native supports */
+    host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
+
+    /* TODO: AMX in XCR0 is not yet configurable */
+    if (function == 0xd && index == 0x0 && reg == R_EAX) {
+        return XCR0_MASK & eax;
+    }
+
+    /*
+     * fault type of CPUID are those will cause #VE injected
+     * into TD guest, which could transfer to KVM to handle it.
+     * Thus, see them as configurable and apply KVM's configuration.
+     */
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        FeatureWordInfo *f = &feature_word_info[w];
+
+        if (f->type == MSR_FEATURE_WORD) {
+            continue;
+        }
+
+        if (f->cpuid.eax == function && f->cpuid.reg == reg &&
+            (!f->cpuid.needs_ecx || f->cpuid.ecx == index) &&
+            tdx_cpuid_lookup[w].faulting) {
+            switch (reg) {
+            case R_EAX:
+                ret |= eax;
+                break;
+            case R_EBX:
+                ret |= ebx;
+                break;
+            case R_ECX:
+                ret |= ecx;
+                break;
+            case R_EDX:
+                ret |= edx;
+                break;
+            default:
+                return 0;
+            }
+
+            return ret;
+        }
+    }
+
+    if (tdx_caps->nr_cpuid_configs <= 0) {
+        return ret;
+    }
+
+    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+        cpuid_c = &tdx_caps->cpuid_configs[i];
+        /* The sub-leaf of function 0x1 is 0xffffffff in tdx_caps */
+        if (cpuid_c->leaf == function && (cpuid_c->sub_leaf == index ||
+            function == 0x1)) {
+            switch (reg) {
+            case R_EAX:
+                ret |= cpuid_c->eax;
+                break;
+            case R_EBX:
+                ret |= cpuid_c->ebx;
+                break;
+            case R_ECX:
+                ret |= cpuid_c->ecx;
+                break;
+            case R_EDX:
+                ret |= cpuid_c->edx;
+                break;
+            default:
+                return 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
+    uint32_t eax, ebx, ecx, edx, tdx_config;
+    uint32_t ret = 0;
+    FeatureWord w;
 
     if (!tdx) {
-        return;
+        return ret;
     }
 
-    switch (function) {
-    case 1:
-        if (reg == R_ECX) {
-            *ret &= ~CPUID_EXT_VMX;
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        FeatureWordInfo *f = &feature_word_info[w];
+
+        if (f->type == MSR_FEATURE_WORD) {
+            continue;
         }
-        break;
-    case 0xd:
-        if (index == 0) {
+
+        if (f->cpuid.eax != function || f->cpuid.reg != reg ||
+            (f->cpuid.needs_ecx && f->cpuid.ecx != index)) {
+            continue;
+        }
+
+        /* Start from native value */
+        host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
+
+        switch (reg) {
+        case R_EAX:
+            ret |= eax;
+            break;
+        case R_EBX:
+            ret |= ebx;
+            break;
+        case R_ECX:
+            ret |= ecx;
+            break;
+        case R_EDX:
+            ret |= edx;
+            break;
+        }
+
+        /* tdx_cap->xfam_fixed check */
+        if (function == 0xd && index == 0) {
             if (reg == R_EAX) {
-                *ret &= (uint32_t)tdx_caps->xfam_fixed0 & XCR0_MASK;
-                *ret |= (uint32_t)tdx_caps->xfam_fixed1 & XCR0_MASK;
+                ret &= (uint32_t)tdx_caps->xfam_fixed0 & XCR0_MASK;
+                ret |= (uint32_t)tdx_caps->xfam_fixed1 & XCR0_MASK;
             } else if (reg == R_EDX) {
-                *ret &= (tdx_caps->xfam_fixed0 & XCR0_MASK) >> 32;
-                *ret |= (tdx_caps->xfam_fixed1 & XCR0_MASK) >> 32;
+                ret &= (tdx_caps->xfam_fixed0 & XCR0_MASK) >> 32;
+                ret |= (tdx_caps->xfam_fixed1 & XCR0_MASK) >> 32;
             }
-        } else if (index == 1) {
-            /* TODO: Adjust XSS when it's supported. */
+            return ret;
         }
-        break;
-    case KVM_CPUID_FEATURES:
-        if (reg == R_EAX) {
-            *ret &= ~((1ULL << KVM_FEATURE_CLOCKSOURCE) |
-                      (1ULL << KVM_FEATURE_CLOCKSOURCE2) |
-                      (1ULL << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) |
-                      (1ULL << KVM_FEATURE_ASYNC_PF) |
-                      (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT) |
-                      (1ULL << KVM_FEATURE_ASYNC_PF_INT));
-        }
-        break;
-    default:
-        /* TODO: Use tdx_caps to adjust CPUID leafs. */
-        break;
+
+        /* configurable cpuid are supported by TDX unconditionally */
+        tdx_config = tdx_get_cpuid_config(function, index, reg);
+        ret |= tdx_config;
+
+        /* enforce "fixed" type CPUID virtualization */
+        ret |= tdx_cpuid_lookup[w].tdx_fixed1;
+        ret &= ~tdx_cpuid_lookup[w].tdx_fixed0;
+
+        return ret;
     }
+
+    return ret;
 }
 
 void tdx_pre_create_vcpu(CPUState *cpu)
