@@ -41,6 +41,7 @@
 #include "exec/address-spaces.h"
 #include "hw/boards.h"
 #include "hw/i386/sgx-epc.h"
+#include "kvm/tdx.h"
 #endif
 
 #include "disas/capstone.h"
@@ -7038,6 +7039,12 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
     x86_cpu_enable_xsave_components(cpu);
 
     /* CPUID[EAX=7,ECX=0].EBX always increased level automatically: */
+#ifndef CONFIG_USER_ONLY
+    if (is_tdx_vm()) {
+        tdx_apply_xfam_dependencies(CPU(cpu));
+    }
+#endif
+
     x86_cpu_adjust_feat_level(cpu, FEAT_7_0_EBX);
     if (cpu->full_cpuid_auto_level) {
         x86_cpu_adjust_feat_level(cpu, FEAT_1_EDX);
