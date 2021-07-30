@@ -639,6 +639,7 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_EXT_TM2      (1U << 8)
 #define CPUID_EXT_SSSE3    (1U << 9)
 #define CPUID_EXT_CID      (1U << 10)
+#define CPUID_EXT_SDBG     (1U << 11)
 #define CPUID_EXT_FMA      (1U << 12)
 #define CPUID_EXT_CX16     (1U << 13)
 #define CPUID_EXT_XTPR     (1U << 14)
@@ -749,6 +750,8 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_7_0_EBX_HLE               (1U << 4)
 /* Intel Advanced Vector Extensions 2 */
 #define CPUID_7_0_EBX_AVX2              (1U << 5)
+/* FDP_EXCPTN_ONLY */
+#define CPUID_7_0_EBX_FDP_EXCPTN_ONLY    (1U << 6)
 /* Supervisor-mode Execution Prevention */
 #define CPUID_7_0_EBX_SMEP              (1U << 7)
 /* 2nd Group of Advanced Bit Manipulation Extensions */
@@ -759,8 +762,14 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_7_0_EBX_INVPCID           (1U << 10)
 /* Restricted Transactional Memory */
 #define CPUID_7_0_EBX_RTM               (1U << 11)
+/* Intel RDT Monitor capability */
+#define CPUID_7_0_EBX_PQM               (1U << 12)
+/* Deprecated FPU CS and FPU DS */
+#define CPUID_7_0_EBX_FCS_FDS_DEP       (1U << 13)
 /* Memory Protection Extension */
 #define CPUID_7_0_EBX_MPX               (1U << 14)
+/* Intel RDT Allocation capability */
+#define CPUID_7_0_EBX_CQE               (1U << 15)
 /* AVX-512 Foundation */
 #define CPUID_7_0_EBX_AVX512F           (1U << 16)
 /* AVX-512 Doubleword & Quadword Instruction */
@@ -818,6 +827,8 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_7_0_ECX_AVX512VNNI        (1U << 11)
 /* Support for VPOPCNT[B,W] and VPSHUFBITQMB */
 #define CPUID_7_0_ECX_AVX512BITALG      (1U << 12)
+/* Intel TME */
+#define CPUID_7_0_ECX_TME               (1U << 13)
 /* POPCNT for vectors of DW/QW */
 #define CPUID_7_0_ECX_AVX512_VPOPCNTDQ  (1U << 14)
 /* Placeholder for bit 15 */
@@ -853,10 +864,14 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_7_0_EDX_ULI               (1U << 5)
 /* AVX512 Vector Pair Intersection to a Pair of Mask Registers */
 #define CPUID_7_0_EDX_AVX512_VP2INTERSECT (1U << 8)
+/* MD Clear supported */
+#define CPUID_7_0_EDX_MD_CLEAR          (1U << 10)
 /* SERIALIZE instruction */
 #define CPUID_7_0_EDX_SERIALIZE         (1U << 14)
 /* TSX Suspend Load Address Tracking instruction */
 #define CPUID_7_0_EDX_TSX_LDTRK         (1U << 16)
+/* PCONFIG */
+#define CPUID_7_0_EDX_PCONFIG           (1U << 18)
 /* Architectural LBR support */
 #define CPUID_7_0_EDX_ARCH_LBR          (1U << 19)
 /* CET IBT feature */
@@ -907,6 +922,7 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_XSAVE_XSAVEC     (1U << 1)
 #define CPUID_XSAVE_XGETBV1    (1U << 2)
 #define CPUID_XSAVE_XSAVES     (1U << 3)
+#define CPUID_XSAVE_XFD        (1U << 4)
 
 #define CPUID_6_EAX_ARAT       (1U << 2)
 
