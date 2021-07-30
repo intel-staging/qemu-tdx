@@ -38,6 +38,10 @@ void tdx_update_xfam_features(CPUState *cpu)
 {
 }
 
+void tdx_check_plus_minus_features(CPUState *cpu)
+{
+}
+
 /* QMP */
 struct TDXCapability *tdx_get_capabilities(void)
 {

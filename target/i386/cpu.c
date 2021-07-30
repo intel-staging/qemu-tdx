@@ -6214,6 +6214,10 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
         }
     }
 
+    if (kvm_tdx_enabled()) {
+        tdx_check_plus_minus_features(CPU(cpu));
+    }
+
     if (!kvm_enabled() || !cpu->expose_kvm) {
         env->features[FEAT_KVM] = 0;
     }
