@@ -39,6 +39,93 @@
 #define TDX1_MIN_TSC_FREQUENCY_KHZ (100 * 1000)
 #define TDX1_MAX_TSC_FREQUENCY_KHZ (10 * 1000 * 1000)
 
+/*
+ * The TODO feature bits below are those
+ * that TDX requires to be fixed but they are not yet
+ * supported by KVM.
+ */
+#define TDX_FIXED1_FEATURES (CPUID_MSR | CPUID_PAE | CPUID_MCE | CPUID_APIC | \
+            CPUID_MTRR | CPUID_MCA | CPUID_CLFLUSH | CPUID_DTS)
+#define TDX_FIXED0_FEATURES (MAKE_64BIT_MASK(10, 1) | MAKE_64BIT_MASK(20, 1) | \
+        MAKE_64BIT_MASK(30, 1))
+#define TDX_FIXED0_EXT_FEATURES (CPUID_EXT_MONITOR | CPUID_EXT_VMX | CPUID_EXT_SMX | \
+            MAKE_64BIT_MASK(16, 1))
+#define TDX_FIXED1_EXT_FEATURES (CPUID_EXT_CX16 | CPUID_EXT_PDCM | CPUID_EXT_X2APIC | \
+            CPUID_EXT_AES | CPUID_EXT_XSAVE | CPUID_EXT_RDRAND | CPUID_EXT_HYPERVISOR)
+#define TDX_FIXED1_EXT2_FEATURES (CPUID_EXT2_NX | CPUID_EXT2_PDPE1GB | CPUID_EXT2_RDTSCP | \
+            CPUID_EXT2_LM | MAKE_64BIT_MASK(0, 11) | MAKE_64BIT_MASK(12, 8) | \
+            MAKE_64BIT_MASK(21, 5) | MAKE_64BIT_MASK(28, 1) | MAKE_64BIT_MASK(30, 2))
+/* TODO: EBX_SGX(bit2) */
+#define TDX_FIXED0_7_0_EBX_FEATURES (CPUID_7_0_EBX_TSC_ADJUST | CPUID_7_0_EBX_MPX | \
+            CPUID_7_0_EBX_SGX)
+#define TDX_FIXED1_7_0_EBX_FEATURES (CPUID_7_0_EBX_FSGSBASE | CPUID_7_0_EBX_RTM | \
+            CPUID_7_0_EBX_RDSEED | CPUID_7_0_EBX_SMAP | CPUID_7_0_EBX_CLFLUSHOPT | \
+            CPUID_7_0_EBX_CLWB | CPUID_7_0_EBX_SHA_NI)
+/* TODO: ECX_FZM(bit15) ECX_ENQCMD(bit29) ECX_SGX_LC(bit30) */
+#define TDX_FIXED0_7_0_ECX_FEATURES (CPUID_7_0_ECX_RESERVED_15 | CPUID_7_0_ECX_RESERVED_17_21 | \
+            CPUID_7_0_ECX_ENQCMD | CPUID_7_0_ECX_SGX_LC)
+#define TDX_FIXED1_7_0_ECX_FEATURES (CPUID_7_0_ECX_MOVDIR64B)
+#define TDX_FIXED1_7_0_EDX_FEATURES (CPUID_7_0_EDX_SPEC_CTRL | CPUID_7_0_EDX_ARCH_CAPABILITIES | \
+            CPUID_7_0_EDX_CORE_CAPABILITY | CPUID_7_0_EDX_SPEC_CTRL_SSBD)
+#define TDX_FIXED0_7_0_EDX_FEATURES (MAKE_64BIT_MASK(0, 2) | MAKE_64BIT_MASK(6, 2) |\
+            MAKE_64BIT_MASK(9, 1) | MAKE_64BIT_MASK(11, 3) | MAKE_64BIT_MASK(17, 1) |\
+            MAKE_64BIT_MASK(21, 1))
+#define TDX_FIXED1_8000_0008_EBX_FEATURES (CPUID_8000_0008_EBX_WBNOINVD)
+#define TDX_FIXED1_XSAVE_EAX_FEATURES (CPUID_XSAVE_XSAVEOPT | CPUID_XSAVE_XSAVEC | \
+            CPUID_XSAVE_XSAVES)
+#define TDX_FIXED0_KVM_FEATURES ((1ULL << KVM_FEATURE_CLOCKSOURCE) | \
+            (1ULL << KVM_FEATURE_CLOCKSOURCE2) | \
+            (1ULL << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) | \
+            (1ULL << KVM_FEATURE_ASYNC_PF) | \
+            (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT))
+
+typedef struct kvm_tdx_cpuid_lookup {
+  uint64_t tdx_fixed0;
+  uint64_t tdx_fixed1;
+  bool faulting;
+} kvm_tdx_cpuid_lookup;
+
+static kvm_tdx_cpuid_lookup tdx_cpuid_lookup[FEATURE_WORDS] = {
+    [FEAT_1_EDX] = {
+        .tdx_fixed0 = TDX_FIXED0_FEATURES,
+        .tdx_fixed1 = TDX_FIXED1_FEATURES,
+    },
+    [FEAT_1_ECX] = {
+        .tdx_fixed0 = TDX_FIXED0_EXT_FEATURES,
+        .tdx_fixed1 = TDX_FIXED1_EXT_FEATURES,
+    },
+    [FEAT_8000_0001_EDX] = {
+        .tdx_fixed1 = TDX_FIXED1_EXT2_FEATURES,
+    },
+    [FEAT_7_0_EBX] = {
+        .tdx_fixed0 = TDX_FIXED0_7_0_EBX_FEATURES,
+        .tdx_fixed1 = TDX_FIXED1_7_0_EBX_FEATURES,
+    },
+    [FEAT_7_0_ECX] = {
+        .tdx_fixed0 = TDX_FIXED0_7_0_ECX_FEATURES,
+        .tdx_fixed1 = TDX_FIXED1_7_0_ECX_FEATURES,
+    },
+    [FEAT_7_0_EDX] = {
+        .tdx_fixed0 = TDX_FIXED0_7_0_EDX_FEATURES,
+        .tdx_fixed1 = TDX_FIXED1_7_0_EDX_FEATURES,
+    },
+    [FEAT_8000_0008_EBX] = {
+        .tdx_fixed1 = TDX_FIXED1_8000_0008_EBX_FEATURES,
+    },
+    [FEAT_XSAVE] = {
+        .tdx_fixed1 = TDX_FIXED1_XSAVE_EAX_FEATURES,
+    },
+    [FEAT_6_EAX] = {
+        .faulting = true,
+    },
+    [FEAT_8000_0007_EDX] = {
+        .faulting = true,
+    },
+    [FEAT_KVM] = {
+        .tdx_fixed0 = TDX_FIXED0_KVM_FEATURES,
+    },
+};
+
 bool kvm_has_tdx(KVMState *s)
 {
     return !!(kvm_check_extension(s, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
