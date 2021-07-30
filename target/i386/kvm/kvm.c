@@ -379,7 +379,8 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
 {
     struct kvm_cpuid2 *cpuid;
     uint32_t ret = 0;
-    uint32_t cpuid_1_edx;
+    uint32_t cpuid_1_edx, cpuid_config;
+    uint32_t tdx_cpuid = 0;
     uint64_t bitmask;
 
     cpuid = get_supported_cpuid(s);
@@ -493,7 +494,14 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
         ret |= 1U << KVM_HINTS_REALTIME;
     }
 
-    tdx_get_supported_cpuid(s, function, index, reg, &ret);
+    if (kvm_tdx_enabled()) {
+        tdx_cpuid = tdx_get_supported_cpuid(function, index, reg);
+        cpuid_config = tdx_get_cpuid_config(function, index, reg);
+        /* Only apply KVM values when the CPUID bits are configurable, others
+         * should follow TDX requirement.
+         */
+        ret = (ret & cpuid_config) | (tdx_cpuid & ~cpuid_config);
+    }
 
     return ret;
 }
