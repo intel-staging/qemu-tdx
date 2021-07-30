@@ -14,6 +14,7 @@ void tdx_pre_create_vcpu(CPUState *cpu);
 void tdx_post_init_vcpu(CPUState *cpu);
 void tdx_update_xfam_features(CPUState *cpu);
 void tdx_check_plus_minus_features(CPUState *cpu);
+uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg);
 
 struct TDXInfo;
 struct TDXInfo *tdx_get_info(void);
