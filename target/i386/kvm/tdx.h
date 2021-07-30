@@ -67,5 +67,6 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
 int tdx_pre_create_vcpu(CPUState *cpu);
 int tdx_parse_tdvf(void *flash_ptr, int size);
 void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
+void tdx_apply_xfam_dependencies(CPUState *cpu);
 
 #endif /* QEMU_I386_TDX_H */
