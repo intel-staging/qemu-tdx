@@ -1678,7 +1678,8 @@ typedef struct CPUArchState {
     uint32_t cpuid_version;
     FeatureWordArray features;
     /* Features that were explicitly enabled/disabled */
-    FeatureWordArray user_features;
+    FeatureWordArray user_plus_features;
+    FeatureWordArray user_minus_features;
     uint32_t cpuid_model[12];
     /* Cache information for CPUID.  When legacy-cache=on, the cache data
      * on each CPUID leaf will be different, because we keep compatibility
