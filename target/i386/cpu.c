@@ -5714,6 +5714,12 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
         r &= ~unavail;
     }
 #endif
+#ifndef CONFIG_USER_ONLY
+    /* skip migratable flag trim in TD VM case */
+    if (is_tdx_vm() && wi->type == CPUID_FEATURE_WORD) {
+        return r;
+    }
+#endif
     if (migratable_only) {
         r &= x86_cpu_get_migratable_flags(w);
     }
