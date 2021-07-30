@@ -4338,17 +4338,24 @@ static bool x86_cpu_have_filtered_features(X86CPU *cpu)
     return false;
 }
 
-void mark_unavailable_features(X86CPU *cpu, FeatureWord w, uint64_t mask,
-                               const char *verbose_prefix)
+void mark_unsuitable_features(X86CPU *cpu, FeatureWord w, uint64_t mask,
+                              const char *verbose_prefix, bool unavailable)
 {
     CPUX86State *env = &cpu->env;
     FeatureWordInfo *f = &feature_word_info[w];
     int i;
 
     if (!cpu->force_features) {
-        env->features[w] &= ~mask;
+        if (unavailable) {
+            env->features[w] &= ~mask;
+        } else {
+            env->features[w] |= mask;
+        }
     }
-    cpu->filtered_features[w] |= mask;
+
+    if (unavailable) {
+        cpu->filtered_features[w] |= mask;
+    }
 
     if (!verbose_prefix) {
         return;
@@ -6188,9 +6195,10 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
             uint64_t unavailable_features = env->features[d->to.index] & d->to.mask;
 
             /* Not an error unless the dependent feature was added explicitly.  */
-            mark_unavailable_features(cpu, d->to.index,
-                                      unavailable_features & env->user_plus_features[d->to.index],
-                                      "This feature depends on other features that were not requested");
+            mark_unsuitable_features(cpu, d->to.index,
+                                     unavailable_features & env->user_plus_features[d->to.index],
+                                     "This feature depends on other features that were not requested",
+                                     true);
 
             env->features[d->to.index] &= ~unavailable_features;
         }
@@ -6223,9 +6231,10 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
             if (cpu->intel_pt_auto_level) {
                 x86_cpu_adjust_level(cpu, &cpu->env.cpuid_min_level, 0x14);
             } else if (cpu->env.cpuid_min_level < 0x14) {
-                mark_unavailable_features(cpu, FEAT_7_0_EBX,
+                mark_unsuitable_features(cpu, FEAT_7_0_EBX,
                     CPUID_7_0_EBX_INTEL_PT,
-                    "Intel PT need CPUID leaf 0x14, please set by \"-cpu ...,intel-pt=on,min-level=0x14\"");
+                    "Intel PT need CPUID leaf 0x14, please set by \"-cpu ...,intel-pt=on,min-level=0x14\"",
+                    true);
             }
         }
 
@@ -6299,7 +6308,7 @@ static void x86_cpu_filter_features(X86CPU *cpu, bool verbose)
             x86_cpu_get_supported_feature_word(w, false);
         uint64_t requested_features = env->features[w];
         uint64_t unavailable_features = requested_features & ~host_feat;
-        mark_unavailable_features(cpu, w, unavailable_features, prefix);
+        mark_unsuitable_features(cpu, w, unavailable_features, prefix, true);
     }
 
     if ((env->features[FEAT_7_0_EBX] & CPUID_7_0_EBX_INTEL_PT) &&
@@ -6326,7 +6335,7 @@ static void x86_cpu_filter_features(X86CPU *cpu, bool verbose)
              * host can't emulate the capabilities we report on
              * cpu_x86_cpuid(), intel-pt can't be enabled on the current host.
              */
-            mark_unavailable_features(cpu, FEAT_7_0_EBX, CPUID_7_0_EBX_INTEL_PT, prefix);
+            mark_unsuitable_features(cpu, FEAT_7_0_EBX, CPUID_7_0_EBX_INTEL_PT, prefix, true);
         }
     }
 }
