@@ -1482,9 +1482,15 @@ static uint64_t x86_cpu_get_migratable_flags(FeatureWord w)
         uint64_t f = 1ULL << i;
 
         /* If the feature name is known, it is implicitly considered migratable,
-         * unless it is explicitly set in unmigratable_flags */
+         * unless it is explicitly set in unmigratable_flags.
+         * TDX is a little different. Although the names of some features are unknown,
+         * but they still should be exposed in TD guest CPUID, e.g. Native type
+         * virtualization CPUIDs: CPUID_7_0_EBX_FDP_EXCPTN_ONLY
+         * TD guest should have this native CPUID bit. */
         if ((wi->migratable_flags & f) ||
-            (wi->feat_names[i] && !(wi->unmigratable_flags & f))) {
+            (wi->feat_names[i] && !(wi->unmigratable_flags & f)) ||
+            (wi->type == CPUID_FEATURE_WORD && !wi->feat_names[i] &&
+             kvm_tdx_enabled())) {
             r |= f;
         }
     }
