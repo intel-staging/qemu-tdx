@@ -5292,7 +5292,11 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
             *ebx |= (cs->nr_cores * cs->nr_threads) << 16;
             *edx |= CPUID_HT;
         }
-        if (!cpu->enable_pmu) {
+        /*
+         * tdx_fixed0/1 are only reflected in env->features[].
+         * Avoid breaking the tdx_fixed when pmu is disabled and TDX is enabled
+         */
+        if (!cpu->enable_pmu && !kvm_tdx_enabled()) {
             *ecx &= ~CPUID_EXT_PDCM;
         }
         break;
