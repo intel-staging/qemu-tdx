@@ -373,6 +373,30 @@ static FeatureDep xfam_dependencies[] = {
                 CPUID_7_0_EDX_AMX_INT8}
     },
     /* TODO: XSS features */
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_RTIT_MASK },
+        .to = { FEAT_7_0_EBX, CPUID_7_0_EBX_INTEL_PT },
+    },
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_RTIT_MASK },
+        .to = { FEAT_14_0_ECX, ~0ull },
+    },
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_CET_MASK },
+        .to = { FEAT_7_0_ECX, CPUID_7_0_ECX_CET_SHSTK },
+    },
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_CET_MASK },
+        .to = { FEAT_7_0_EDX, CPUID_7_0_EDX_CET_IBT },
+    },
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_RESERVED_14_MASK },
+        .to = { FEAT_7_0_EDX, CPUID_7_0_EDX_ULI },
+    },
+    {
+        .from = { FEAT_XSAVE_XSS_LO, XSTATE_RESERVED_15_MASK },
+        .to = { FEAT_7_0_EDX, CPUID_7_0_EDX_ARCH_LBR },
+    },
 };
 
 /*
@@ -385,6 +409,7 @@ FeatureMask tdx_xfam_feature_delegate[] = {
     [XSTATE_OPMASK_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
     [XSTATE_ZMM_Hi256_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
     [XSTATE_Hi16_ZMM_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_RTIT_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_INTEL_PT },
     [XSTATE_PKRU_BIT] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_PKU },
     [XSTATE_XTILE_CFG_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_BF16 },
     [XSTATE_XTILE_DATA_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_BF16 },
@@ -419,6 +444,10 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
 
     if (function == 0xd && index == 0x0 && reg == R_EAX) {
         return (XCR0_MASK & ~xfam_fixed) & eax;
+    }
+
+    if (function == 0xd && index == 0x1 && reg == R_ECX) {
+        return (XSS_MASK & ~xfam_fixed) & ecx;
     }
 
     /*
@@ -554,6 +583,17 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
             } else if (reg == R_EDX) {
                 ret &= (tdx_caps->xfam_fixed0 & XCR0_MASK) >> 32;
                 ret |= (tdx_caps->xfam_fixed1 & XCR0_MASK) >> 32;
+            }
+            return ret;
+        }
+
+        if (function == 0xd && index == 1) {
+            if (reg == R_ECX) {
+                ret &= (uint32_t)tdx_caps->xfam_fixed0 & XSS_MASK;
+                ret |= (uint32_t)tdx_caps->xfam_fixed1 & XSS_MASK;
+            } else if (reg == R_EDX) {
+                ret &= (tdx_caps->xfam_fixed0 & XSS_MASK) >> 32;
+                ret |= (tdx_caps->xfam_fixed1 & XSS_MASK) >> 32;
             }
             return ret;
         }
