@@ -78,6 +78,7 @@
             (1ULL << KVM_FEATURE_CLOCKSOURCE2) | \
             (1ULL << KVM_FEATURE_CLOCKSOURCE_STABLE_BIT) | \
             (1ULL << KVM_FEATURE_ASYNC_PF) | \
+            (1ULL << KVM_FEATURE_STEAL_TIME) | \
             (1ULL << KVM_FEATURE_ASYNC_PF_VMEXIT))
 
 /* Some KVM PV features are treated as configurable */
