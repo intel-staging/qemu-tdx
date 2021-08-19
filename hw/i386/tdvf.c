@@ -20,6 +20,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/mmap-alloc.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu/units.h"
@@ -36,7 +37,6 @@
 
 static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
 {
-    void *ram_ptr = memory_region_get_ram_ptr(ms->ram);
     X86MachineState *x86ms = X86_MACHINE(ms);
 
     if (entry->type == TDVF_SECTION_TYPE_BFV ||
@@ -46,9 +46,7 @@ static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
             exit(1);
     }
 
-    if (entry->address < 4 * GiB) {
-        entry->mem_ptr = ram_ptr + entry->address;
-    } else {
+    if (entry->address >= 4 * GiB) {
         /*
          * If TDVF temp memory describe in TDVF metadata lays in RAM, reserve
          * the region property.
@@ -60,8 +58,6 @@ static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
                          entry->type, entry->address, entry->size);
             exit(1);
         }
-        entry->mem_ptr = ram_ptr + x86ms->below_4g_mem_size +
-                         entry->address - 4 * GiB;
     }
     e820_change_type(entry->address, entry->size, E820_RESERVED);
 }
@@ -103,12 +99,13 @@ static void tdvf_init_bios_memory(int fd, const char *filename,
         exit(1);
     }
 
-    entry->mem_ptr = memory_region_get_ram_ptr(entry->mr);
+    memory_region_add_subregion(system_memory, entry->address, entry->mr);
+
+    if (entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
+        e820_add_entry(entry->address, entry->size, E820_RESERVED);
+    }
+
     if (entry->data_len) {
-        /*
-         * The memory_region api doesn't allow partial file mapping, create
-         * ram and copy the contents
-         */
         if (lseek(fd, entry->data_offset, SEEK_SET) != entry->data_offset) {
             error_report("can't seek to 0x%x %s", entry->data_offset, filename);
             exit(1);
@@ -119,11 +116,6 @@ static void tdvf_init_bios_memory(int fd, const char *filename,
         }
     }
 
-    memory_region_add_subregion(system_memory, entry->address, entry->mr);
-
-    if (entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
-        e820_add_entry(entry->address, entry->size, E820_RESERVED);
-    }
 }
 
 static void tdvf_parse_section_entry(TdxFirmwareEntry *entry,
@@ -299,6 +291,11 @@ int load_tdvf(const char *filename)
     tdvf_parse_metadata_entries(fd, fw, &metadata);
 
     for_each_fw_entry(fw, entry) {
+        entry->mem_ptr = qemu_ram_mmap(-1, size, qemu_real_host_page_size, 0, 0);
+        if (entry->mem_ptr == MAP_FAILED) {
+            error_report("failed to allocate memory for TDVF");
+            exit(1);
+        }
         if (entry->address < x86ms->below_4g_mem_size ||
             entry->address > 4 * GiB) {
             tdvf_init_ram_memory(ms, entry);

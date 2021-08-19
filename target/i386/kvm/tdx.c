@@ -16,6 +16,7 @@
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
 
+#include "qemu/mmap-alloc.h"
 #include "cpu.h"
 #include "cpu-internal.h"
 #include "kvm_i386.h"
@@ -236,6 +237,9 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
                          KVM_TDX_MEASURE_MEMORY_REGION : 0;
 
         tdx_ioctl(KVM_TDX_INIT_MEM_REGION, metadata, &mem_region);
+
+        qemu_ram_munmap(-1, entry->mem_ptr, entry->size);
+        entry->mem_ptr = NULL;
     }
 
     tdx_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
