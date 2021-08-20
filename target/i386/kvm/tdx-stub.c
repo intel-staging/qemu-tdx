@@ -31,3 +31,7 @@ struct TDXCapability *tdx_get_capabilities(void)
 {
     return NULL;
 }
+
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
+}

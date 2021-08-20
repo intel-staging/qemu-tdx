@@ -53,10 +53,16 @@ typedef struct TdxGuest {
     uint8_t mrownerconfig[48];  /* sha348 digest */
 
     TdxFirmware fw;
+
+    /* runtime state */
+    int event_notify_interrupt;
+    char *quote_generation_str;
+    SocketAddress *quote_generation;
 } TdxGuest;
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp);
 void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
                              uint32_t index, int reg, uint32_t *ret);
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
 
 #endif
