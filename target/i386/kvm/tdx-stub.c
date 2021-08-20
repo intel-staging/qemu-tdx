@@ -44,3 +44,7 @@ struct TDXCapability *tdx_get_capabilities(void)
 {
     return NULL;
 }
+
+void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+}

@@ -19,12 +19,16 @@
 #include "qemu/mmap-alloc.h"
 #include "cpu.h"
 #include "cpu-internal.h"
+#include "exec/address-spaces.h"
 #include "kvm_i386.h"
 #include "hw/boards.h"
+#include "hw/i386/apic_internal.h"
 #include "hw/i386/tdvf-hob.h"
+#include "io/channel-socket.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
 #include "qapi/qapi-types-misc-target.h"
+#include "qapi/qapi-visit-sockets.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/runstate-action.h"
@@ -914,6 +918,25 @@ static void tdx_guest_set_debug(Object *obj, bool value, Error **errp)
     tdx->debug = value;
 }
 
+static char *tdx_guest_get_quote_generation(
+    Object *obj, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+    return g_strdup(tdx->quote_generation_str);
+}
+
+static void tdx_guest_set_quote_generation(
+    Object *obj, const char *value, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+    tdx->quote_generation = socket_parse(value, errp);
+    if (!tdx->quote_generation)
+        return;
+
+    g_free(tdx->quote_generation_str);
+    tdx->quote_generation_str = g_strdup(value);
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -940,6 +963,14 @@ static void tdx_guest_init(Object *obj)
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_sha384(obj, "mrownerconfig", tdx->mrownerconfig,
                                OBJ_PROP_FLAG_READWRITE);
+
+    tdx->quote_generation_str = NULL;
+    tdx->quote_generation = NULL;
+    object_property_add_str(obj, "quote-generation-service",
+                            tdx_guest_get_quote_generation,
+                            tdx_guest_set_quote_generation);
+
+    tdx->event_notify_interrupt = -1;
 }
 
 static void tdx_guest_finalize(Object *obj)
@@ -963,4 +994,349 @@ bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
         return false;
 
     return tdx->debug;
+}
+
+#define TDG_VP_VMCALL_GET_QUOTE                         0x10002ULL
+#define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
+
+#define TDG_VP_VMCALL_SUCCESS           0x0000000000000000ULL
+#define TDG_VP_VMCALL_INVALID_OPERAND   0x8000000000000000ULL
+
+#define TDX_GET_QUOTE_MAX_BUF_LEN   (128 * 1024)
+
+#define TDX_GET_QUOTE_STRUCTURE_VERSION 1ULL
+
+/*
+ * Follow the format of TDX status code
+ * 63:32: class code
+ *   63: error
+ *   62: recoverable
+ *   47:40 class ID : 9 platform
+ *   39:32: details_L1
+ * 31:0: details_L2
+ */
+#define TDX_GET_QUOTE_STATUS_SUCCESS    0ULL
+#define TDX_GET_QUOTE_STATUS_ERROR      0x8000090100000000ULL
+
+/* Format of pages shared with guest. */
+struct tdx_get_quote_header {
+    /* Format version: must be 1. */
+    uint64_t structure_version;
+
+    /*
+     * GetQuote status code:
+     *   Guest must set error_code to 0 to avoid information leak.
+     *   Qemu sets this before interrupting guest.
+     */
+    uint64_t error_code;
+
+    /*
+     * in-message size: The message will follow this header.
+     * The in-message will be send to QGS.
+     */
+    uint32_t in_len;
+
+    /*
+     * out-message size:
+     * On request, buffer size of shared page. Guest must sets.
+     * On return, message size from QGS. Qemu overwrites this field.
+     * The message will follows this header.  The in-message is overwritten.
+     */
+    uint32_t out_len;
+
+    /*
+     * Message buffer follows.
+     * Guest sets message that will be send to QGS.  If out_len > in_len, guest
+     * should zero remaining buffer to avoid information leak.
+     * Qemu overwrites this buffer with a message returned from QGS.
+     */
+};
+
+struct tdx_get_quote_task {
+    uint32_t apic_id;
+    hwaddr gpa;
+    struct tdx_get_quote_header hdr;
+    int event_notify_interrupt;
+    QIOChannelSocket *ioc;
+};
+
+typedef struct x86_msi_address_lo {
+    struct {
+        uint32_t        reserved_0              : 2,
+                        dest_mode_logical       : 1,
+                        redirect_hint           : 1,
+                        reserved_1              : 1,
+                        virt_destid_8_14        : 7,
+                        destid_0_7              : 8,
+                        base_address            : 12;
+    };
+} QEMU_PACKED x86_msi_address_lo_t;
+
+typedef struct x86_msi_address_hi {
+    uint32_t    reserved        : 8,
+                destid_8_31     : 24;
+} QEMU_PACKED  x86_msi_address_hi_t;
+
+typedef struct x86_msi_data {
+    uint32_t    vector                  : 8,
+                delivery_mode           : 3,
+                dest_mode_logical       : 1,
+                reserved                : 2,
+                active_low              : 1,
+                is_level                : 1;
+} QEMU_PACKED x86_msi_data_t;
+
+struct x86_msi {
+    union {
+        x86_msi_address_lo_t x86_address_lo;
+        uint32_t address_lo;
+    };
+    union {
+        x86_msi_address_hi_t x86_address_hi;
+        uint32_t address_hi;
+    };
+    union {
+        x86_msi_data_t x86_data;
+        uint32_t data;
+    };
+};
+
+/*
+ * TODO: If QGS doesn't reply for long time, make it an error and interrupt
+ * guest.
+ */
+static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
+{
+    struct tdx_get_quote_task *t = opaque;
+    Error *err = NULL;
+    char *in_data = NULL;
+    char *out_data = NULL;
+    size_t out_len;
+    ssize_t size;
+    int ret;
+    struct x86_msi x86_msi;
+    struct kvm_msi msi;
+
+    assert(32 <= t->event_notify_interrupt && t->event_notify_interrupt <= 255);
+    t->hdr.error_code = TDX_GET_QUOTE_STATUS_ERROR;
+
+    if (qio_task_propagate_error(task, NULL)) {
+        goto error;
+    }
+
+    in_data = g_malloc(t->hdr.in_len);
+    if (address_space_read(&address_space_memory, t->gpa + sizeof(t->hdr),
+                           MEMTXATTRS_UNSPECIFIED, in_data, t->hdr.in_len)
+        != MEMTX_OK) {
+        goto error;
+    }
+
+    if (qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data, t->hdr.in_len, &err) ||
+        err) {
+        goto error;
+    }
+
+    out_len = 0;
+    out_data = g_malloc(t->hdr.out_len);
+    size = 0;
+    while (out_len < t->hdr.out_len) {
+        size = qio_channel_read(
+            QIO_CHANNEL(t->ioc), out_data, t->hdr.out_len - out_len, &err);
+        if (err) {
+            break;
+        }
+        if (size <= 0) {
+            break;
+        }
+        out_len += size;
+    }
+    /*
+     * Treat partial read as success and let the QGS client to handle it because
+     * the client knows better about the QGS.
+     */
+    if (out_len == 0 && (err || size < 0)) {
+        goto error;
+    }
+
+    if (address_space_write(
+            &address_space_memory, t->gpa + sizeof(t->hdr),
+            MEMTXATTRS_UNSPECIFIED, out_data, out_len) != MEMTX_OK) {
+        goto error;
+    }
+    /*
+     * Even if out_len == 0, it's a success.  It's up to the QGS-client contract
+     * how to interpret the zero-sized message as return message.
+     */
+    t->hdr.out_len = out_len;
+    t->hdr.error_code = TDX_GET_QUOTE_STATUS_SUCCESS;
+
+error:
+    if (t->hdr.error_code != TDX_GET_QUOTE_STATUS_SUCCESS) {
+        t->hdr.out_len = 0;
+    }
+    if (address_space_write(
+            &address_space_memory, t->gpa,
+            MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
+        error_report("TDX: failed to updsate GetQuote header.\n");
+    }
+
+    x86_msi = (struct x86_msi) {
+        .x86_address_lo  = {
+            .reserved_0 = 0,
+            .dest_mode_logical = 0,
+            .redirect_hint = 0,
+            .reserved_1 = 0,
+            .virt_destid_8_14 = 0,
+            .destid_0_7 = t->apic_id & 0xff,
+        },
+        .x86_address_hi = {
+            .reserved = 0,
+            .destid_8_31 = t->apic_id >> 8,
+        },
+        .x86_data = {
+            .vector = t->event_notify_interrupt,
+            .delivery_mode = APIC_DM_FIXED,
+            .dest_mode_logical = 0,
+            .reserved = 0,
+            .active_low = 0,
+            .is_level = 0,
+        },
+    };
+    msi = (struct kvm_msi) {
+        .address_lo = x86_msi.address_lo,
+        .address_hi = x86_msi.address_hi,
+        .data = x86_msi.data,
+        .flags = 0,
+        .devid = 0,
+    };
+    ret = kvm_vm_ioctl(kvm_state, KVM_SIGNAL_MSI, &msi);
+    if (ret < 0) {
+        /* In this case, no better way to tell it to guest.  Log it. */
+        error_report("TDX: injection %d failed, interrupt lost (%s).\n",
+                     t->event_notify_interrupt, strerror(-ret));
+    }
+
+    qio_channel_close(QIO_CHANNEL(t->ioc), &err);
+    object_unref(OBJECT(t->ioc));
+    g_free(in_data);
+    g_free(out_data);
+    return;
+}
+
+static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    hwaddr gpa = vmcall->in_r12;
+    struct tdx_get_quote_header hdr;
+    MachineState *ms;
+    TdxGuest *tdx;
+    QIOChannelSocket *ioc;
+    struct tdx_get_quote_task *t;
+
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    if (!QEMU_IS_ALIGNED(gpa, 4096)) {
+        return;
+    }
+
+    if (address_space_read(&address_space_memory, gpa, MEMTXATTRS_UNSPECIFIED,
+                           &hdr, sizeof(hdr)) != MEMTX_OK) {
+        return;
+    }
+    if (hdr.structure_version != TDX_GET_QUOTE_STRUCTURE_VERSION) {
+        return;
+    }
+    /*
+     * Paranoid: Guest should clear error_code to avoid information leak.
+     * Enforce it.  The initial value of error_code doesn't matter for qemu to
+     * process the request.
+     */
+    if (hdr.error_code != TDX_GET_QUOTE_STATUS_SUCCESS) {
+        return;
+    }
+
+    /* Only safe-guard check to avoid too large buffer size. */
+    if (hdr.in_len > TDX_GET_QUOTE_MAX_BUF_LEN ||
+        hdr.out_len > TDX_GET_QUOTE_MAX_BUF_LEN) {
+        return;
+    }
+
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    ioc = qio_channel_socket_new();
+
+    t = g_malloc(sizeof(*t));
+    t->apic_id = cpu->apic_id;
+    t->gpa = gpa;
+    t->hdr = hdr;
+    t->ioc = ioc;
+
+    qemu_mutex_lock(&tdx->lock);
+    if (tdx->event_notify_interrupt < 32 || 255 < tdx->event_notify_interrupt ||
+        !tdx->quote_generation) {
+        qemu_mutex_unlock(&tdx->lock);
+        object_unref(OBJECT(ioc));
+        g_free(t);
+        return;
+    }
+    t->event_notify_interrupt = tdx->event_notify_interrupt;
+    qio_channel_socket_connect_async(
+        ioc, tdx->quote_generation, tdx_handle_get_quote_connected, t, g_free,
+        NULL);
+    qemu_mutex_unlock(&tdx->lock);
+
+    vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+}
+
+static void tdx_handle_setup_event_notify_interrupt(struct kvm_tdx_vmcall *vmcall)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = TDX_GUEST(ms->cgs);
+    int event_notify_interrupt = vmcall->in_r12;
+
+    if (32 <= event_notify_interrupt && event_notify_interrupt <= 255) {
+        qemu_mutex_lock(&tdx->lock);
+        tdx->event_notify_interrupt = event_notify_interrupt;
+        qemu_mutex_unlock(&tdx->lock);
+        vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    }
+}
+
+static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    /* For now handle only TDG.VP.VMCALL. */
+    if (vmcall->type != 0) {
+        warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",
+                    vmcall->type, vmcall->subfunction);
+        return;
+    }
+
+    switch (vmcall->subfunction) {
+    case TDG_VP_VMCALL_GET_QUOTE:
+        tdx_handle_get_quote(cpu, vmcall);
+        break;
+    case TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT:
+        tdx_handle_setup_event_notify_interrupt(vmcall);
+        break;
+    default:
+        warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",
+                    vmcall->type, vmcall->subfunction);
+        break;
+    }
+}
+
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
+    if (!kvm_tdx_enabled())
+        return;
+
+    switch (tdx_exit->type) {
+    case KVM_EXIT_TDX_VMCALL:
+        tdx_handle_vmcall(cpu, &tdx_exit->u.vmcall);
+        break;
+    default:
+        warn_report("unknown tdx exit type 0x%x", tdx_exit->type);
+        break;
+    }
 }
