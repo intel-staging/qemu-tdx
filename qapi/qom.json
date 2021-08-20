@@ -798,13 +798,16 @@
 #
 # @mrownerconfig: MROWNERCONFIG SHA384 hex string of 48 * 2 length (default: 0)
 #
+# @quote-generation-service: socket address for Quote Generation Service(QGS)
+#
 # Since: 6.0
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*debug': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
-            '*mrownerconfig': 'str' } }
+            '*mrownerconfig': 'str',
+            '*quote-generation-service': 'str' } }
 
 ##
 # @ObjectType:

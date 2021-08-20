@@ -4,6 +4,9 @@
 #include "qapi/error.h"
 #include "qapi/qapi-commands-misc-target.h"
 
+#include "cpu.h"
+#include "tdx.h"
+
 #ifndef CONFIG_USER_ONLY
 bool kvm_has_tdx(KVMState *s)
 {
@@ -50,6 +53,10 @@ uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
 bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
 {
     return false;
+}
+
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
 }
 
 /* QMP */
