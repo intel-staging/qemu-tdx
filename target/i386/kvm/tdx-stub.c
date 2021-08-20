@@ -50,6 +50,10 @@ bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
     return false;
 }
 
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
+}
+
 /* QMP */
 struct TDXCapability *tdx_get_capabilities(void)
 {
