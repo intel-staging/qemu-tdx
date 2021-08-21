@@ -21,6 +21,10 @@ typedef struct TdxFirmware {
     const char *file_name;
     uint64_t file_size;
 
+    /* for split tdvf case. (TDVF_VARS.fd and TDVF_CODE.fd instead of TDVF.fd) */
+    const char *cfv_name;
+    uint64_t cfv_size;
+
     /* metadata */
     uint32_t nr_entries;
     TdxFirmwareEntry *entries;
