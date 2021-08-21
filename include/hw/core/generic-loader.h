@@ -35,6 +35,7 @@ struct GenericLoaderState {
     uint32_t cpu_num;
 
     char *file;
+    char *config_firmware_volume;
 
     bool force_raw;
     bool data_be;

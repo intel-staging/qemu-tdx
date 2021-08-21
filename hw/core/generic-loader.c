@@ -149,7 +149,7 @@ static void generic_loader_realize(DeviceState *dev, Error **errp)
             }
 
             if (size < 0) {
-                size = load_tdvf(s->file);
+                size = load_tdvf(s->file, s->config_firmware_volume);
             }
 
             if (size < 0) {
@@ -191,6 +191,8 @@ static Property generic_loader_props[] = {
     DEFINE_PROP_UINT32("cpu-num", GenericLoaderState, cpu_num, CPU_NONE),
     DEFINE_PROP_BOOL("force-raw", GenericLoaderState, force_raw, false),
     DEFINE_PROP_STRING("file", GenericLoaderState, file),
+    DEFINE_PROP_STRING("config-firmware-volume", GenericLoaderState,
+                       config_firmware_volume),
     DEFINE_PROP_END_OF_LIST(),
 };
 
