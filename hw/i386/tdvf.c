@@ -62,8 +62,9 @@ static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
     e820_change_type(entry->address, entry->size, E820_RESERVED);
 }
 
-static void tdvf_init_bios_memory(int fd, const char *filename,
-                                  TdxFirmwareEntry *entry)
+static void tdvf_init_bios_memory(
+    int fd, const char *filename, int cfv_fd, off_t cfv_size,
+    const char *cfv_name, TdxFirmwareEntry *entry)
 {
     static unsigned int nr_cfv;
     static unsigned int nr_tmp;
@@ -106,12 +107,43 @@ static void tdvf_init_bios_memory(int fd, const char *filename,
     }
 
     if (entry->data_len) {
-        if (lseek(fd, entry->data_offset, SEEK_SET) != entry->data_offset) {
-            error_report("can't seek to 0x%x %s", entry->data_offset, filename);
+        int tfd = fd;
+        const char *tfilename = filename;
+        off_t offset = entry->data_offset;
+        if (cfv_fd != -1) {
+            /*
+             * Adjust file offset and which file to read, when TDVF is split
+             * into two files, TDVF_VARS.fd and TDVF_CODE.fd.
+             * TDVF.fd =
+             *   file offset = 0
+             *   TDVF_VARS.fd(CFV)
+             *   file offset = cfv_size
+             *   TDVF_CODE.fd(BFV)
+             *   file end
+             */
+            if (offset >= cfv_size) {
+                tfd = fd;
+                tfilename = filename;
+                offset -= cfv_size;
+            } else if (offset + entry->data_len <= cfv_size) {
+                tfd = cfv_fd;
+                tfilename = cfv_name;
+            } else {
+                /* tdvf entry shouldn't cross over CFV and BFV. */
+                error_report("unexpected tdvf entry cfv %s %lx bfv %s "
+                             "offset %x size %x",
+                             cfv_name, cfv_size, filename,
+                             entry->data_offset, entry->data_len);
+                exit(1);
+            }
+        }
+
+        if (lseek(tfd, offset, SEEK_SET) != offset) {
+            error_report("can't seek to 0x%lx %s", offset, tfilename);
             exit(1);
         }
-        if (read(fd, entry->mem_ptr, entry->data_len) != entry->data_len) {
-            error_report("can't read 0x%x %s", entry->data_len, filename);
+        if (read(tfd, entry->mem_ptr, entry->data_len) != entry->data_len) {
+            error_report("can't read 0x%x %s", entry->data_len, tfilename);
             exit(1);
         }
     }
@@ -159,7 +191,7 @@ static void tdvf_parse_section_entry(TdxFirmwareEntry *entry,
 }
 
 static void tdvf_parse_metadata_entries(int fd, TdxFirmware *fw,
-                                        TdvfMetadata *metadata)
+                                        const TdvfMetadata *metadata)
 {
 
     TdvfSectionEntry *sections;
@@ -189,17 +221,17 @@ static void tdvf_parse_metadata_entries(int fd, TdxFirmware *fw,
     }
 
     for (i = 0; i < fw->nr_entries; i++) {
-        tdvf_parse_section_entry(&fw->entries[i], &sections[i], fw->file_size);
+        tdvf_parse_section_entry(&fw->entries[i], &sections[i],
+                                 fw->file_size + fw->cfv_size);
     }
     g_free(sections);
 }
 
-static int tdvf_parse_metadata_header(int fd, TdvfMetadata *metadata)
+static int tdvf_parse_metadata_header(TdxFirmware *fw, int fd, TdvfMetadata *metadata)
 {
     uint32_t offset;
-    int64_t size;
+    int64_t size = fw->file_size;
 
-    size = lseek(fd, 0, SEEK_END);
     if (size < TDVF_METDATA_OFFSET_FROM_END || (uint32_t)size != size) {
         return -1;
     }
@@ -213,7 +245,7 @@ static int tdvf_parse_metadata_header(int fd, TdvfMetadata *metadata)
         return -1;
     }
 
-    offset = le32_to_cpu(offset);
+    offset = le32_to_cpu(offset) - fw->cfv_size;
     if (offset > size - sizeof(*metadata)) {
         return -1;
     }
@@ -244,10 +276,10 @@ static int tdvf_parse_metadata_header(int fd, TdvfMetadata *metadata)
         return -1;
     }
 
-    return size;
+    return 0;
 }
 
-int load_tdvf(const char *filename)
+int load_tdvf(const char *filename, const char *config_firmware_volume)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
     X86MachineState *x86ms = X86_MACHINE(ms);
@@ -257,6 +289,8 @@ int load_tdvf(const char *filename)
     TdxFirmware *fw;
     int64_t size;
     int fd;
+    int cfv_fd = -1;
+    off_t cfv_size = 0;
 
     if (!kvm_enabled()) {
         return -1;
@@ -267,26 +301,52 @@ int load_tdvf(const char *filename)
         return -1;
     }
 
+    /* Error out if the user is attempting to load multiple TDVFs. */
+    fw = &tdx->fw;
+    if (fw->file_name) {
+        error_report("tdvf can be specified only once.");
+        exit(1);
+    }
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0) {
         return -1;
     }
-
-    size = tdvf_parse_metadata_header(fd, &metadata);
+    size = lseek(fd, 0, SEEK_END);
     if (size < 0) {
+        error_report("can't lseek tdvf %s.", filename);
+        return -1;
+    }
+    fw->file_name = g_strdup(filename);
+    fw->file_size = size;
+
+    if (config_firmware_volume) {
+        if (fw->cfv_name) {
+            error_report("tdvf config firmware volume can be specified only once.");
+            exit(1);
+        }
+        cfv_fd = open(config_firmware_volume, O_RDONLY | O_BINARY);
+        if (cfv_fd < 0) {
+            error_report("can't open tdvf config firmware volume %s.",
+                         config_firmware_volume);
+            exit(1);
+        }
+        cfv_size = lseek(cfv_fd, 0, SEEK_END);
+        if (cfv_size < 0) {
+            error_report("can't lseek tdvf config firmware volume %s.",
+                         config_firmware_volume);
+            exit(1);
+        }
+        fw->cfv_name = g_strdup(config_firmware_volume);
+        fw->cfv_size = cfv_size;
+    } else {
+        fw->cfv_name = NULL;
+        fw->cfv_size = 0;
+    }
+
+    if (tdvf_parse_metadata_header(fw, fd, &metadata) < 0) {
         close(fd);
         return -1;
     }
-
-    /* Error out if the user is attempting to load multiple TDVFs. */
-    fw = &tdx->fw;
-    if (fw->file_name) {
-        error_report("tdvf can only be specified once.");
-        exit(1);
-    }
-
-    fw->file_size = size;
-    fw->file_name = g_strdup(filename);
 
     tdvf_parse_metadata_entries(fd, fw, &metadata);
 
@@ -300,10 +360,12 @@ int load_tdvf(const char *filename)
             entry->address > 4 * GiB) {
             tdvf_init_ram_memory(ms, entry);
         } else {
-            tdvf_init_bios_memory(fd, filename, entry);
+            tdvf_init_bios_memory(fd, filename, cfv_fd, cfv_size,
+                                  config_firmware_volume, entry);
         }
     }
 
     close(fd);
+    close(cfv_fd);
     return 0;
 }
