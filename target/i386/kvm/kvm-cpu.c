@@ -50,6 +50,16 @@ static bool kvm_cpu_realizefn(CPUState *cs, Error **errp)
                                                    MSR_IA32_UCODE_REV);
         }
     }
+
+    /*
+     * Some CPUID bits can't be reflected in env->features[], but they still
+     * have restrictions for TDX and need to config TD in TD init.
+     * e.g. physical address bits is fixed to 0x34.
+     */
+    if (kvm_tdx_enabled()) {
+        cpu->phys_bits = 0x34;
+    }
+
     return host_cpu_realizefn(cs, errp);
 }
 
