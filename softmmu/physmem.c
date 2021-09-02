@@ -3316,14 +3316,14 @@ inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
             /* RAM case */
             fuzz_dma_read_cb(addr, l, mr);
             ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
-            if (attrs.debug && mr->ram_debug_ops) {
-                mr->ram_debug_ops->read(buf, ram_ptr,
-                                        addr, l,
-                                        attrs);
+            if (attrs.debug && mr->ram_debug_ops && mr->ram_debug_ops->read) {
+                if (mr->ram_debug_ops->read(buf, ram_ptr,
+                                            addr, l,
+                                            attrs) < 0)
+                    result |= MEMTX_ERROR;
             } else {
                 memcpy(buf, ram_ptr, l);
             }
-            result = MEMTX_OK;
         }
         if (release_lock) {
             qemu_mutex_unlock_iothread();
@@ -3334,7 +3334,7 @@ inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
         buf += l;
         addr += l;
 
-        if (!len) {
+        if (!len || result != MEMTX_OK) {
             break;
         }
         l = len;
@@ -3353,6 +3353,7 @@ MemTxResult address_space_write_rom_debug(AddressSpace *as,
     hwaddr addr1;
     MemoryRegion *mr;
     const uint8_t *buf = ptr;
+    MemTxResult result = MEMTX_OK;
 
     RCU_READ_LOCK_GUARD();
     while (len > 0) {
@@ -3365,18 +3366,25 @@ MemTxResult address_space_write_rom_debug(AddressSpace *as,
         } else {
             /* ROM/RAM case */
             ram_ptr = qemu_map_ram_ptr(mr->ram_block, addr1);
-            if (attrs.debug && mr->ram_debug_ops) {
-                mr->ram_debug_ops->write(ram_ptr, addr, buf, l, attrs);
+            if (attrs.debug && mr->ram_debug_ops && mr->ram_debug_ops->write) {
+                if (mr->ram_debug_ops->write(ram_ptr,addr,
+                                             buf, l, attrs) < 0)
+                    result |= MEMTX_ERROR;
             } else {
                 memcpy(ram_ptr, buf, l);
             }
             invalidate_and_set_dirty(mr, addr1, l);
         }
+
+        if (result != MEMTX_ERROR) {
+            break;
+        }
+
         len -= l;
         buf += l;
         addr += l;
     }
-    return MEMTX_OK;
+    return result;
 }
 
 int64_t address_space_cache_init(MemoryRegionCache *cache,
