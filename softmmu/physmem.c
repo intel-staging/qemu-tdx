@@ -3317,10 +3317,9 @@ inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
             fuzz_dma_read_cb(addr, l, mr);
             ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
             if (attrs.debug && mr->ram_debug_ops) {
-                if (mr->ram_debug_ops->read(buf, ram_ptr,
-                                            addr, l,
-                                            attrs) < 0)
-                    memset(buf, 0, l);
+                mr->ram_debug_ops->read(buf, ram_ptr,
+                                        addr, l,
+                                        attrs);
             } else {
                 memcpy(buf, ram_ptr, l);
             }

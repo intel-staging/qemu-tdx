@@ -5050,6 +5050,8 @@ static int kvm_encrypted_guest_read_memory(uint8_t *dest,
                                            const uint8_t *hva_src, hwaddr gpa_src,
                                            uint32_t len, MemTxAttrs attrs)
 {
+    int ret;
+    uint64_t completed_len = 0;
     struct kvm_rw_memory rw;
 
     if (kvm_tdx_enabled()) {
@@ -5062,14 +5064,37 @@ static int kvm_encrypted_guest_read_memory(uint8_t *dest,
 
     rw.ubuf = (__u64)dest;
     rw.len = len;
+    for(;;) {
+        ret = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_READ_MEMORY, &rw);
+        if (ret >= 0)
+            break;
 
-    return kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_READ_MEMORY, &rw);
+        completed_len += rw.len;
+        rw.addr += rw.len;
+        rw.ubuf += rw.len;
+        rw.len = len - completed_len;
+
+        if (ret != -EINTR)
+            break;
+    }
+
+    if (ret < 0) {
+        uint64_t total_fail_len;
+
+        total_fail_len = len > completed_len ? len - completed_len : len;
+        completed_len = len - total_fail_len;
+        memset(dest + completed_len, 0, total_fail_len);
+    }
+
+    return ret;
 }
 
 static int kvm_encrypted_guest_write_memory(uint8_t *hva_dest, hwaddr gpa_dest,
                                             const uint8_t *src,
                                             uint32_t len, MemTxAttrs attrs)
 {
+    int ret;
+    uint64_t completed_len = 0;
     struct kvm_rw_memory rw;
 
     if (kvm_tdx_enabled()) {
@@ -5082,8 +5107,20 @@ static int kvm_encrypted_guest_write_memory(uint8_t *hva_dest, hwaddr gpa_dest,
 
     rw.ubuf = (__u64)src;
     rw.len = len;
+    for(;;) {
+        ret = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_WRITE_MEMORY, &rw);
+        if (ret >= 0)
+            break;
+        if (ret != -EINTR)
+            break;
 
-    return kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_WRITE_MEMORY, &rw);
+        completed_len += rw.len;
+        rw.addr += rw.len;
+        rw.ubuf += rw.len;
+        rw.len = len - completed_len;
+    }
+
+    return ret;
 }
 
 static MemoryRegionRAMReadWriteOps kvm_encrypted_guest_mr_debug_ops = {
