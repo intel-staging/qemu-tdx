@@ -439,6 +439,23 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
     /* Check if native supports */
     host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
 
+    switch (reg) {
+    case R_EAX:
+        native = eax;
+        break;
+    case R_EBX:
+        native = ebx;
+        break;
+    case R_ECX:
+        native = ecx;
+        break;
+    case R_EDX:
+        native = edx;
+        break;
+    default:
+        return 0;
+    }
+
     xfam_fixed = (uint32_t)tdx_caps->xfam_fixed1 |
                 ~(uint32_t)tdx_caps->xfam_fixed0;
 
@@ -467,22 +484,7 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
 
         if (f->cpuid.eax == function && f->cpuid.reg == reg &&
             (!f->cpuid.needs_ecx || f->cpuid.ecx == index)) {
-            switch (reg) {
-            case R_EAX:
-                native = eax;
-                break;
-            case R_EBX:
-                native = ebx;
-                break;
-            case R_ECX:
-                native = ecx;
-                break;
-            case R_EDX:
-                native = edx;
-                break;
-            default:
-                return 0;
-            }
+
             if (tdx_cpuid_lookup[w].faulting) {
                 return native;
             }
@@ -530,6 +532,15 @@ uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg)
                 return 0;
             }
         }
+    }
+
+    /*
+     * If the CPUID isn't included in env->features, QEMU-TDX will
+     * not enforce additional check even it also has some CPUID restrictions.
+     * e.g. CPUID[0xa]. View it as configurable and keep the values from KVM.
+     */
+    if (w == FEATURE_WORDS && i == tdx_caps->nr_cpuid_configs) {
+        ret = native;
     }
 
     return ret;
