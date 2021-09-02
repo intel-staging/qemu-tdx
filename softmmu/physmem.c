@@ -3318,7 +3318,7 @@ inline MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
             ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
             if (attrs.debug && mr->ram_debug_ops) {
                 if (mr->ram_debug_ops->read(buf, ram_ptr,
-                                            addr1, l,
+                                            addr, l,
                                             attrs) < 0)
                     memset(buf, 0, l);
             } else {
@@ -3367,7 +3367,7 @@ MemTxResult address_space_write_rom_debug(AddressSpace *as,
             /* ROM/RAM case */
             ram_ptr = qemu_map_ram_ptr(mr->ram_block, addr1);
             if (attrs.debug && mr->ram_debug_ops) {
-                mr->ram_debug_ops->write(ram_ptr, addr1, buf, l, attrs);
+                mr->ram_debug_ops->write(ram_ptr, addr, buf, l, attrs);
             } else {
                 memcpy(ram_ptr, buf, l);
             }
