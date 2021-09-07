@@ -1301,6 +1301,17 @@ static uint64_t dump_pfn_to_paddr(DumpState *s, uint64_t pfn)
     return (pfn + ARCH_PFN_OFFSET) << target_page_shift;
 }
 
+static void dump_encrypted_guest_memory(MemoryRegion *mr, uint8_t *buf,
+                                        const uint8_t* hva, hwaddr gpa,
+                                        size_t size)
+{
+    if (memory_region_ram_debug_ops_read_available(mr)) {
+        mr->ram_debug_ops->read(buf, hva, gpa, size,
+                                MEMTXATTRS_UNSPECIFIED_DEBUG);
+    } else {
+        memset(buf, 0, size);
+    }
+}
 /*
  * Return the page frame number and the page content in *bufptr. bufptr can be
  * NULL. If not NULL, *bufptr must contains a target page size of pre-allocated
@@ -1329,12 +1340,18 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
     while (1) {
         if (addr >= block->target_start && addr < block->target_end) {
             size_t n = MIN(block->target_end - addr, page_size - addr % page_size);
+            MemoryRegion *mr = block->mr;
+
             hbuf = block->host_addr + (addr - block->target_start);
             if (!buf) {
                 if (n == page_size) {
                     /* this is a whole target page, go for it */
                     assert(addr % page_size == 0);
+
                     buf = hbuf;
+                    if (s->encrypted_guest && bufptr && *bufptr) {
+                        dump_encrypted_guest_memory(mr, *bufptr, hbuf, addr, page_size);
+                    }
                     break;
                 } else if (bufptr) {
                     assert(*bufptr);
@@ -1345,7 +1362,13 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
                 }
             }
 
-            memcpy(buf + addr % page_size, hbuf, n);
+            if (s->encrypted_guest && bufptr && *bufptr) {
+                dump_encrypted_guest_memory(mr, *bufptr + addr % page_size,
+                                            hbuf, addr, n);
+            } else {
+                memcpy(buf + addr % page_size, hbuf, n);
+            }
+
             addr += n;
             if (addr % page_size == 0) {
                 /* we filled up the page */
@@ -1372,7 +1395,7 @@ static bool get_next_page(GuestPhysBlock **blockptr, uint64_t *pfnptr,
         }
     }
 
-    if (bufptr) {
+    if (!s->encrypted_guest && bufptr) {
         *bufptr = buf;
     }
 
