@@ -157,6 +157,7 @@ typedef struct DumpState {
     MemoryMappingList list;
     bool resume;
     bool detached;
+    bool encrypted_guest;
     hwaddr memory_offset;
     int fd;
 
@@ -174,6 +175,7 @@ typedef struct DumpState {
     /* Elf dump related data */
     uint32_t phdr_num;
     uint32_t shdr_num;
+
     ssize_t note_size;
     hwaddr shdr_offset;
     hwaddr phdr_offset;
