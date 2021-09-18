@@ -90,7 +90,7 @@
             (1ULL << KVM_FEATURE_PV_EOI) | (1ULL << KVM_FEATURE_PV_UNHALT) | \
             (1ULL << KVM_FEATURE_PV_TLB_FLUSH) | (1ULL << KVM_FEATURE_PV_SEND_IPI) | \
             (1ULL << KVM_FEATURE_POLL_CONTROL) | (1ULL << KVM_FEATURE_PV_SCHED_YIELD) | \
-            (1ULL << KVM_FEATURE_ASYNC_PF_INT) | (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID))
+            (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID))
 
 typedef struct kvm_tdx_cpuid_lookup {
   uint64_t tdx_fixed0;
