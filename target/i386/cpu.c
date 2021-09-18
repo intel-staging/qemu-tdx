@@ -3555,10 +3555,10 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "SapphireRapids-TDX",
-        .level = 0x20,
+        .level = 0x21,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
-        .model = 15,
+        .model = 143,
         .stepping = 3,
         .features[FEAT_1_EDX] =
             /* CPUID_CONFIG: CPUID_ACPI CPUID_HT CPUID_TM CPUID_PBE */
@@ -3667,7 +3667,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
             (1ULL << KVM_FEATURE_PV_EOI) | (1ULL << KVM_FEATURE_PV_UNHALT) |
             (1ULL << KVM_FEATURE_PV_TLB_FLUSH) | (1ULL << KVM_FEATURE_PV_SEND_IPI) |
             (1ULL << KVM_FEATURE_POLL_CONTROL) | (1ULL << KVM_FEATURE_PV_SCHED_YIELD) |
-            (1ULL << KVM_FEATURE_ASYNC_PF_INT) | (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID),
+            (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID),
         .xlevel = 0x80000008,
         .model_id = "Genuine Intel(R) CPU $0000%@"
     },
