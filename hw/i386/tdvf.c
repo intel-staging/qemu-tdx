@@ -246,7 +246,8 @@ struct tdx_metadata_offset {
     uint32_t offset;
 };
 
-static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset)
+static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset,
+                                     TdxFirmware *fw)
 {
     uint8_t *data;
 
@@ -264,6 +265,23 @@ static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset)
         return true;
     }
 
+    /* Fallback to the legacy method if no TDX_METADATA_GUID structure */
+    if (size < TDVF_METDATA_OFFSET_FROM_END) {
+        return false;
+    }
+
+    /* Chase the metadata pointer to get to the actual metadata. */
+    *offset = size - TDVF_METDATA_OFFSET_FROM_END;
+    if (lseek(fd, *offset, SEEK_SET) != *offset) {
+        return false;
+    }
+    if (read(fd, offset, sizeof(*offset)) != sizeof(*offset)) {
+        return false;
+    }
+    if (le32_to_cpu(*offset) > fw->cfv_size) {
+        *offset = le32_to_cpu(*offset) - fw->cfv_size;
+        return true;
+    }
     return false;
 }
 
@@ -273,7 +291,7 @@ static int tdvf_parse_metadata_header(TdxFirmware *fw, int fd,
     uint32_t offset = 0;
     int64_t size = fw->file_size;
 
-    if (!tdvf_get_metadata_offset(fd, size, &offset)) {
+    if (!tdvf_get_metadata_offset(fd, size, &offset, fw)) {
         return -1;
     }
 
