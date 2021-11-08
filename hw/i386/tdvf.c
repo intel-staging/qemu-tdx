@@ -226,25 +226,57 @@ static void tdvf_parse_metadata_entries(int fd, TdxFirmware *fw,
     g_free(sections);
 }
 
-static int tdvf_parse_metadata_header(TdxFirmware *fw, int fd, TdvfMetadata *metadata)
+/* Parse and save OVMF's GUID-ed structures */
+static bool tdvf_parse_ovmf_guid(int fd, int64_t size)
 {
+    void *ptr = qemu_ram_mmap(fd, size, qemu_real_host_page_size, 0, 0);
+
+    if (ptr == MAP_FAILED) {
+        return false;
+    }
+
+    pc_system_parse_ovmf_flash(ptr, size);
+    qemu_ram_munmap(fd, ptr, size);
+
+    return true;
+}
+
+#define TDX_METADATA_GUID "e47a6535-984a-4798-865e-4685a7bf8ec2"
+struct tdx_metadata_offset {
     uint32_t offset;
+};
+
+static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset)
+{
+    uint8_t *data;
+
+    if (!offset || (uint32_t)size != size) {
+        return false;
+    }
+
+    if (!tdvf_parse_ovmf_guid(fd, size)) {
+        return false;
+    }
+
+    /* Locate TDVF metadata by TDX_METADATA_GUID structure */
+    if (pc_system_ovmf_table_find(TDX_METADATA_GUID, &data, NULL)) {
+        *offset = size - le32_to_cpu(((struct tdx_metadata_offset *)data)->offset);
+        return true;
+    }
+
+    return false;
+}
+
+static int tdvf_parse_metadata_header(TdxFirmware *fw, int fd,
+                                      TdvfMetadata *metadata)
+{
+    uint32_t offset = 0;
     int64_t size = fw->file_size;
 
-    if (size < TDVF_METDATA_OFFSET_FROM_END || (uint32_t)size != size) {
+    if (!tdvf_get_metadata_offset(fd, size, &offset)) {
         return -1;
     }
 
-    /* Chase the metadata pointer to get to the actual metadata. */
-    offset = size - TDVF_METDATA_OFFSET_FROM_END;
-    if (lseek(fd, offset, SEEK_SET) != offset) {
-        return -1;
-    }
-    if (read(fd, &offset, sizeof(offset)) != sizeof(offset)) {
-        return -1;
-    }
-
-    offset = le32_to_cpu(offset) - fw->cfv_size;
     if (offset > size - sizeof(*metadata)) {
         return -1;
     }
