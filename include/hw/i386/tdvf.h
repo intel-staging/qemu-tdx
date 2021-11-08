@@ -24,8 +24,6 @@
 
 #include "qemu/osdep.h"
 
-#define TDVF_METDATA_OFFSET_FROM_END    0x20
-
 #define TDVF_SECTION_TYPE_BFV               0
 #define TDVF_SECTION_TYPE_CFV               1
 #define TDVF_SECTION_TYPE_TD_HOB            2
