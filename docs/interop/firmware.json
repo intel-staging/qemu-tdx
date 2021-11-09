@@ -55,10 +55,13 @@
 #
 # @memory: The firmware is to be mapped into memory.
 #
+# @loader: The firmware executable and its accompanying NVRAM file are to
+#          be loaded by generic loader device.
+#
 # Since: 3.0
 ##
 { 'enum' : 'FirmwareDevice',
-  'data' : [ 'flash', 'kernel', 'memory' ] }
+  'data' : [ 'flash', 'kernel', 'memory', 'loader' ] }
 
 ##
 # @FirmwareTarget:
@@ -120,6 +123,9 @@
 #              Architecture Programmer's Manual. QEMU command line options
 #              related to this feature are documented in
 #              "docs/amd-memory-encryption.txt".
+#
+# @intel-tdx: The firmware supports running under INTEL Trust Domain
+#             Extensions Virtualization.
 #
 # @enrolled-keys: The variable store (NVRAM) template associated with
 #                 the firmware binary has the UEFI Secure Boot
@@ -185,9 +191,9 @@
 # Since: 3.0
 ##
 { 'enum' : 'FirmwareFeature',
-  'data' : [ 'acpi-s3', 'acpi-s4', 'amd-sev', 'amd-sev-es', 'enrolled-keys',
-             'requires-smm', 'secure-boot', 'verbose-dynamic',
-             'verbose-static' ] }
+  'data' : [ 'acpi-s3', 'acpi-s4', 'amd-sev', 'amd-sev-es', 'intel-tdx',
+             'enrolled-keys', 'requires-smm', 'secure-boot',
+             'verbose-dynamic', 'verbose-static' ] }
 
 ##
 # @FirmwareFlashFile:
@@ -320,6 +326,36 @@
   'data'   : { 'filename' : 'str' } }
 
 ##
+# @FirmwareMappingLoader:
+#
+# Describes loading and mapping properties for the firmware executable
+# and its accompanying NVRAM file, when @FirmwareDevice is @loader.
+#
+# @executable: Identifies the firmware executable. The firmware
+#              executable may be shared by multiple virtual machine
+#              definitions.
+#
+# @nvram-template: Identifies the NVRAM template compatible with
+#                  @executable. Management software instantiates an
+#                  individual copy -- a specific NVRAM file --
+#                  from @nvram-template for each new virtual
+#                  machine definition created. @nvram-template
+#                  itself is never mapped into virtual machines, only
+#                  individual copies of it are. An NVRAM file is
+#                  typically used for persistently storing the
+#                  non-volatile UEFI variables of a virtual machine
+#                  definition.
+#
+# The corresponding QEMU command line options are
+#     -device loader,id=fd0,file=@executable,config-firmware-volume=FILENAME_OF_PRIVATE_NVRAM_FILE
+#
+# Since: 3.0
+##
+{ 'struct' : 'FirmwareMappingLoader',
+  'data'   : { 'executable'       : 'str',
+               'nvram-template'   : 'str' } }
+
+##
 # @FirmwareMapping:
 #
 # Provides a discriminated structure for firmware to describe its
@@ -335,7 +371,8 @@
   'discriminator' : 'device',
   'data'          : { 'flash'  : 'FirmwareMappingFlash',
                       'kernel' : 'FirmwareMappingKernel',
-                      'memory' : 'FirmwareMappingMemory' } }
+                      'memory' : 'FirmwareMappingMemory',
+                      'loader' : 'FirmwareMappingLoader' } }
 
 ##
 # @Firmware:
@@ -583,6 +620,35 @@
 #         "-t GCC48",
 #         "-b DEBUG",
 #         "-D FD_SIZE_4MB"
+#     ]
+# }
+#
+# {
+#     "description": "OVMF with TDX support",
+#     "interface-types": [
+#         "uefi"
+#     ],
+#     "mapping": {
+#         "device": "loader",
+#         "executable": "/usr/share/OVMF/OVMF_CODE.fd",
+#         "nvram-template": "/usr/share/OVMF/OVMF_VARS.fd",
+#     },
+#     "targets": [
+#         {
+#             "architecture": "x86_64",
+#             "machines": [
+#                 "pc-q35-*"
+#             ]
+#         }
+#     ],
+#     "features": [
+#         "intel-tdx",
+#     ],
+#     "tags": [
+#         "-a X64",
+#         "-p OvmfPkg/OvmfPkgX64.dsc",
+#         "-t GCC48",
+#         "-b DEBUG",
 #     ]
 # }
 #
