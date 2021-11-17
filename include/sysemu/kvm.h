@@ -547,4 +547,9 @@ bool kvm_cpu_check_are_resettable(void);
 
 bool kvm_arch_cpu_check_are_resettable(void);
 
+typedef void (*set_memory_region_debug_ops)(void *handle, MemoryRegion *mr);
+void kvm_setup_set_memory_region_debug_ops(struct KVMState *s,
+                                           set_memory_region_debug_ops new_ops);
+void kvm_set_memory_region_debug_ops(void *handle, MemoryRegion *mr);
+
 #endif
