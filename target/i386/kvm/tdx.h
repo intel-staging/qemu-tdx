@@ -60,7 +60,7 @@ typedef struct TdxGuest {
     SocketAddress *quote_generation;
 } TdxGuest;
 
-int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp);
+int tdx_kvm_init(ConfidentialGuestSupport *cgs, KVMState *s, Error **errp);
 void tdx_get_supported_cpuid(KVMState *s, uint32_t function,
                              uint32_t index, int reg, uint32_t *ret);
 void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
