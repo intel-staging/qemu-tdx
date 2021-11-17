@@ -794,3 +794,18 @@ void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
         break;
     }
 }
+
+bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
+{
+    TdxGuest *tdx;
+
+    if (!cgs)
+        return false;
+
+    tdx = (TdxGuest *)object_dynamic_cast(OBJECT(cgs),
+                                          TYPE_TDX_GUEST);
+    if (!tdx)
+        return false;
+
+    return tdx->debug;
+}

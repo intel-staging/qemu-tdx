@@ -102,6 +102,11 @@ static void tdvf_init_bios_memory(
 
     memory_region_add_subregion(system_memory, entry->address, entry->mr);
 
+    if (tdx_debug_enabled(MACHINE(qdev_get_machine())->cgs)) {
+        kvm_set_memory_region_debug_ops(NULL, entry->mr);
+    }
+
+
     if (entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
         e820_add_entry(entry->address, entry->size, E820_RESERVED);
     }
