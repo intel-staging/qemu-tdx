@@ -360,35 +360,40 @@ int kvm_physical_memory_addr_from_host(KVMState *s, void *ram,
 static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, bool new)
 {
     KVMState *s = kvm_state;
-    struct kvm_userspace_memory_region mem;
+    struct kvm_userspace_memory_region_ext mem;
     int ret;
 
-    mem.slot = slot->slot | (kml->as_id << 16);
-    mem.guest_phys_addr = slot->start_addr;
-    mem.userspace_addr = (unsigned long)slot->ram;
-    mem.flags = slot->flags;
+    mem.region.slot = slot->slot | (kml->as_id << 16);
+    mem.region.guest_phys_addr = slot->start_addr;
+    mem.region.userspace_addr = (unsigned long)slot->ram;
+    mem.region.flags = slot->flags;
+    if (slot->flags & KVM_MEM_PRIVATE) {
+        mem.private_fd = slot->fd;
+        mem.private_offset = slot->ofs;
+    }
 
-    if (slot->memory_size && !new && (mem.flags ^ slot->old_flags) & KVM_MEM_READONLY) {
+    if (slot->memory_size && !new && (slot->flags ^ slot->old_flags) & KVM_MEM_READONLY) {
         /* Set the slot size to 0 before setting the slot to the desired
          * value. This is needed based on KVM commit 75d61fbc. */
-        mem.memory_size = 0;
+        mem.region.memory_size = 0;
         ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
         if (ret < 0) {
             goto err;
         }
     }
-    mem.memory_size = slot->memory_size;
+    mem.region.memory_size = slot->memory_size;
     ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
-    slot->old_flags = mem.flags;
+    slot->old_flags = mem.region.flags;
 err:
-    trace_kvm_set_user_memory(mem.slot >> 16, (uint16_t)mem.slot, mem.flags,
-                              mem.guest_phys_addr, mem.memory_size,
-                              mem.userspace_addr, ret);
+    trace_kvm_set_user_memory(mem.region.slot >> 16, (uint16_t)mem.region.slot,
+                              mem.region.flags, mem.region.guest_phys_addr,
+                              mem.region.memory_size,
+                              mem.region.userspace_addr, ret);
     if (ret < 0) {
         error_report("%s: KVM_SET_USER_MEMORY_REGION failed, slot=%d,"
                      " start=0x%" PRIx64 ", size=0x%" PRIx64 ": %s",
-                     __func__, mem.slot, slot->start_addr,
-                     (uint64_t)mem.memory_size, strerror(errno));
+                     __func__, mem.region.slot, slot->start_addr,
+                     (uint64_t)mem.region.memory_size, strerror(errno));
     }
     return ret;
 }
@@ -560,6 +565,9 @@ static int kvm_mem_flags(MemoryRegion *mr)
     }
     if (readonly && kvm_readonly_mem_allowed) {
         flags |= KVM_MEM_READONLY;
+    }
+    if (mr->ram_block && mr->ram_block->private_fd > 0) {
+        flags |= KVM_MEM_PRIVATE;
     }
     return flags;
 }
@@ -1458,6 +1466,10 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         mem->ram_start_offset = ram_start_offset;
         mem->ram = ram;
         mem->flags = kvm_mem_flags(mr);
+        if (mem->flags & KVM_MEM_PRIVATE) {
+            mem->fd = mr->ram_block->private_fd;
+            mem->ofs = (uint8_t*)ram - mr->ram_block->host;
+        }
         kvm_slot_init_dirty_bitmap(mem);
         err = kvm_set_user_memory_region(kml, mem, true);
         if (err) {
