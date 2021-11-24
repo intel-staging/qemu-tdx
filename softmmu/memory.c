@@ -1641,6 +1641,14 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
         error_propagate(errp, err);
     }
 }
+
+void memory_region_set_private_fd(MemoryRegion *mr, int fd)
+{
+    if (mr->ram_block) {
+        mr->ram_block->private_fd = fd;
+    }
+}
+
 #endif
 
 void memory_region_init_ram_ptr(MemoryRegion *mr,
