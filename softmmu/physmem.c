@@ -3376,15 +3376,9 @@ int qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque)
     return ret;
 }
 
-/*
- * Unmap pages of memory from start to start+length such that
- * they a) read as 0, b) Trigger whatever fault mechanism
- * the OS provides for postcopy.
- * The pages must be unmapped by the end of the function.
- * Returns: 0 on success, none-0 on failure
- *
- */
-int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
+static int ram_block_discard_range_fd(RAMBlock *rb, uint64_t start,
+                                      size_t length, int fd)
+
 {
     int ret = -1;
 
@@ -3411,15 +3405,15 @@ int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
          *    fallocate works on hugepages and shmem
          *    shared anonymous memory requires madvise REMOVE
          */
-        need_madvise = (rb->page_size == qemu_host_page_size);
-        need_fallocate = rb->fd != -1;
+        need_madvise = (rb->page_size == qemu_host_page_size) && (rb->fd == fd);
+        need_fallocate = fd != -1;
         if (need_fallocate) {
             /* For a file, this causes the area of the file to be zero'd
              * if read, and for hugetlbfs also causes it to be unmapped
              * so a userfault will trigger.
              */
 #ifdef CONFIG_FALLOCATE_PUNCH_HOLE
-            ret = fallocate(rb->fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+            ret = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
                             start, length);
             if (ret) {
                 ret = -errno;
@@ -3443,7 +3437,7 @@ int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
              * fallocate'd away).
              */
 #if defined(CONFIG_MADVISE)
-            if (qemu_ram_is_shared(rb) && rb->fd < 0) {
+            if (qemu_ram_is_shared(rb) && fd < 0) {
                 ret = madvise(host_startaddr, length, QEMU_MADV_REMOVE);
             } else {
                 ret = madvise(host_startaddr, length, QEMU_MADV_DONTNEED);
@@ -3474,6 +3468,20 @@ int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
 err:
     return ret;
 }
+
+/*
+ * Unmap pages of memory from start to start+length such that
+ * they a) read as 0, b) Trigger whatever fault mechanism
+ * the OS provides for postcopy.
+ * The pages must be unmapped by the end of the function.
+ * Returns: 0 on success, none-0 on failure
+ *
+ */
+int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
+{
+    return ram_block_discard_range_fd(rb, start, length, rb->fd);
+}
+
 
 bool ramblock_is_pmem(RAMBlock *rb)
 {
@@ -3661,4 +3669,31 @@ bool ram_block_discard_is_required(void)
 {
     return qatomic_read(&ram_block_discard_required_cnt) ||
            qatomic_read(&ram_block_coordinated_discard_required_cnt);
+}
+
+int ram_block_convert_range(RAMBlock *rb, uint64_t start, size_t length,
+                            bool shared_to_private)
+{
+    int fd;
+
+    if (!rb || rb->restricted_fd <= 0) {
+        return -1;
+    }
+
+    if (!QEMU_PTR_IS_ALIGNED(start, rb->page_size) ||
+        !QEMU_PTR_IS_ALIGNED(length, rb->page_size)) {
+        return -1;
+    }
+
+    if (length > rb->max_length) {
+        return -1;
+    }
+
+    if (shared_to_private) {
+        fd = rb->fd;
+    } else {
+        fd = rb->restricted_fd;
+    }
+
+    return ram_block_discard_range_fd(rb, start, length, fd);
 }
