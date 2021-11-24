@@ -2902,6 +2902,58 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
+static int kvm_encrypt_reg_region(hwaddr start, hwaddr size, bool reg_region)
+{
+    int r;
+    struct kvm_memory_attributes  attr;
+    attr.attributes = reg_region ? KVM_MEMORY_ATTRIBUTE_PRIVATE : 0;
+
+    attr.address = start;
+    attr.size = size;
+    attr.flags = 0;
+
+    r = kvm_vm_ioctl(kvm_state, KVM_SET_MEMORY_ATTRIBUTES, &attr);
+    if (r || attr.size != 0) {
+        warn_report("%s: failed to set memory attr (0x%lx+%#zx) error '%s'",
+                     __func__, start, size, strerror(errno));
+    }
+    return r;
+}
+
+static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
+{
+    MemoryRegionSection section;
+    void *addr;
+    RAMBlock *rb;
+    ram_addr_t offset;
+    int ret = -1;
+
+    section = memory_region_find(get_system_memory(), start, size);
+    if (!section.mr) {
+        return ret;
+    }
+
+    if (memory_region_can_be_private(section.mr)) {
+        ret = kvm_encrypt_reg_region(start, size, shared_to_private);
+    
+        addr = memory_region_get_ram_ptr(section.mr) +
+               section.offset_within_region;
+        rb = qemu_ram_block_from_host(addr, false, &offset);
+        /*
+         * With KVM_MEMORY_(UN)ENCRYPT_REG_REGION by kvm_encrypt_reg_region(),
+         * operation on underlying file descriptor is only for releasing
+         * unnecessary pages.
+         */
+        (void)ram_block_convert_range(rb, offset, size, shared_to_private);
+    } else {
+        warn_report("Unknown start 0x%"HWADDR_PRIx" size 0x%"HWADDR_PRIx" shared_to_private %d",
+                    start, size, shared_to_private);
+    }
+
+    memory_region_unref(section.mr);
+    return ret;
+}
+
 int kvm_cpu_exec(CPUState *cpu)
 {
     struct kvm_run *run = cpu->kvm_run;
@@ -3059,6 +3111,10 @@ int kvm_cpu_exec(CPUState *cpu)
                 ret = kvm_arch_handle_exit(cpu, run);
                 break;
             }
+            break;
+        case KVM_EXIT_MEMORY_FAULT:
+            ret = kvm_convert_memory(run->memory.gpa, run->memory.size,
+                                     run->memory.flags & KVM_MEMORY_EXIT_FLAG_PRIVATE);
             break;
         default:
             DPRINTF("kvm_arch_handle_exit\n");
