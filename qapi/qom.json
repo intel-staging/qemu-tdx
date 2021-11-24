@@ -644,6 +644,32 @@
   'data': { '*hugetlb': 'bool',
             '*hugetlbsize': 'size',
             '*seal': 'bool' } }
+##
+# @MemoryBackendPrivateMemfdProperties:
+#
+# Properties for memory-backend-memfd-private objects.
+#
+# The @share boolean option is true by default with memfd.
+#
+# @hugetlb: if true, the file to be created resides in the hugetlbfs filesystem
+#           (default: false)
+#
+# @hugetlbsize: the hugetlb page size on systems that support multiple hugetlb
+#               page sizes (it must be a power of 2 value supported by the
+#               system). 0 selects a default page size. This option is ignored
+#               if @hugetlb is false. (default: 0)
+#
+# @seal: if true, create a sealed-file, which will block further resizing of
+#        the memory (default: true)
+#
+# Since: 2.12
+##
+
+  { 'struct': 'MemoryBackendPrivateMemfdProperties',
+  'base': 'MemoryBackendProperties',
+  'data': { '*hugetlb': 'bool',
+            '*hugetlbsize': 'size',
+            '*seal': 'bool' } }
 
 ##
 # @MemoryBackendEpcProperties:
@@ -848,6 +874,9 @@
     'memory-backend-file',
     { 'name': 'memory-backend-memfd',
       'if': 'CONFIG_LINUX' },
+    'memory-backend-file-private',
+    { 'name': 'memory-backend-memfd-private',
+      'if': 'CONFIG_LINUX' },
     'memory-backend-ram',
     'pef-guest',
     { 'name': 'pr-manager-helper',
@@ -913,6 +942,8 @@
                                       'if': 'CONFIG_LINUX' },
       'memory-backend-file':        'MemoryBackendFileProperties',
       'memory-backend-memfd':       { 'type': 'MemoryBackendMemfdProperties',
+                                      'if': 'CONFIG_LINUX' },
+      'memory-backend-memfd-private':       { 'type': 'MemoryBackendPrivateMemfdProperties',
                                       'if': 'CONFIG_LINUX' },
       'memory-backend-ram':         'MemoryBackendProperties',
       'pr-manager-helper':          { 'type': 'PrManagerHelperProperties',
