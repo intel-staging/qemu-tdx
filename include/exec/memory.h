@@ -1329,6 +1329,17 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
                                     int fd,
                                     ram_addr_t offset,
                                     Error **errp);
+
+/**
+ * memory_region_set_private_fd:  Set RAM memory region with a private fd.
+ *
+ * @mr: the #MemoryRegion to be set.
+ * @fd: the fd to provide private memory.
+ *
+ */
+
+void memory_region_set_private_fd(MemoryRegion *mr, int fd);
+
 #endif
 
 /**
