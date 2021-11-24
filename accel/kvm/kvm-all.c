@@ -2860,6 +2860,26 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
+static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
+{
+    MemoryRegionSection section;
+    void *addr;
+    RAMBlock *rb;
+    ram_addr_t offset;
+    int ret;
+
+    section = memory_region_find(get_system_memory(), start, size);
+    if (section.mr) {
+        addr = memory_region_get_ram_ptr(section.mr) +
+               section.offset_within_region;
+        rb = qemu_ram_block_from_host(addr, false, &offset);
+        ret = ram_block_convert_range(rb, offset, size, shared_to_private);
+        memory_region_unref(section.mr);
+        return ret;
+    }
+    return -1;
+}
+
 int kvm_cpu_exec(CPUState *cpu)
 {
     struct kvm_run *run = cpu->kvm_run;
@@ -3006,6 +3026,11 @@ int kvm_cpu_exec(CPUState *cpu)
                 ret = kvm_arch_handle_exit(cpu, run);
                 break;
             }
+            break;
+        case KVM_EXIT_MEMORY_ERROR:
+                 ret = kvm_convert_memory(run->memory.gpa,
+                                          run->memory.size,
+                                          run->memory.flags & KVM_MEMORY_EXIT_FLAG_PRIVATE);
             break;
         default:
             DPRINTF("kvm_arch_handle_exit\n");
