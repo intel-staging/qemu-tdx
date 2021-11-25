@@ -908,8 +908,6 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
 #define TDG_VP_VMCALL_INVALID_OPERAND   0x8000000000000000ULL
 #define TDG_VP_VMCALL_ALIGN_ERROR       0x8000000000000002ULL
 
-#define TDX_GET_QUOTE_MAX_BUF_LEN   (128 * 1024)
-
 #define TDX_GET_QUOTE_STRUCTURE_VERSION 1ULL
 
 /*
@@ -923,6 +921,10 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
  */
 #define TDX_GET_QUOTE_STATUS_SUCCESS    0ULL
 #define TDX_GET_QUOTE_STATUS_ERROR      0x8000090100000000ULL
+
+/* Limit to avoid resource starvation. */
+#define TDX_GET_QUOTE_MAX_BUF_LEN       (128 * 1024)
+#define TDX_MAX_GET_QUOTE_REQUEST       16
 
 /* Format of pages shared with guest. */
 struct tdx_get_quote_header {
@@ -1050,6 +1052,8 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     int ret;
     struct x86_msi x86_msi;
     struct kvm_msi msi;
+    MachineState *ms;
+    TdxGuest *tdx;
 
     assert(32 <= t->event_notify_interrupt && t->event_notify_interrupt <= 255);
     t->hdr.error_code = cpu_to_le64(TDX_GET_QUOTE_STATUS_ERROR);
@@ -1156,6 +1160,14 @@ error:
     object_unref(OBJECT(t->ioc));
     g_free(in_data);
     g_free(out_data);
+
+    /* Maintain the number of in-flight requests. */
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    qemu_mutex_lock(&tdx->lock);
+    tdx->quote_generation_num--;
+    qemu_mutex_unlock(&tdx->lock);
+
     return;
 }
 
@@ -1215,13 +1227,16 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 
     qemu_mutex_lock(&tdx->lock);
     if (tdx->event_notify_interrupt < 32 || 255 < tdx->event_notify_interrupt ||
-        !tdx->quote_generation) {
+        !tdx->quote_generation ||
+        /* Prevent too many in-flight get-quote request. */
+        tdx->quote_generation_num >= TDX_MAX_GET_QUOTE_REQUEST) {
         qemu_mutex_unlock(&tdx->lock);
         vmcall->status_code = TDG_VP_VMCALL_RETRY;
         object_unref(OBJECT(ioc));
         g_free(t);
         return;
     }
+    tdx->quote_generation_num++;
     t->event_notify_interrupt = tdx->event_notify_interrupt;
     qio_channel_socket_connect_async(
         ioc, tdx->quote_generation, tdx_handle_get_quote_connected, t, g_free,

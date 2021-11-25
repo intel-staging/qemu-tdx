@@ -47,6 +47,9 @@ typedef struct TdxGuest {
 
     /* runtime state */
     int event_notify_interrupt;
+
+    /* GetQuote */
+    int quote_generation_num;
     char *quote_generation_str;
     SocketAddress *quote_generation;
 } TdxGuest;
