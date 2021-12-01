@@ -103,6 +103,13 @@ struct kvm_userspace_memory_region {
 	__u64 userspace_addr; /* start of the userspace allocated memory */
 };
 
+struct kvm_userspace_memory_region_ext {
+	struct kvm_userspace_memory_region region;
+	__u64 private_offset;
+	__u32 private_fd;
+	__u32 padding[5];
+};
+
 /*
  * The bit 0 ~ bit 15 of kvm_memory_region::flags are visible for userspace,
  * other bits are reserved for kvm internal use which are defined in
@@ -110,6 +117,7 @@ struct kvm_userspace_memory_region {
  */
 #define KVM_MEM_LOG_DIRTY_PAGES	(1UL << 0)
 #define KVM_MEM_READONLY	(1UL << 1)
+#define KVM_MEM_PRIVATE		(1UL << 2)
 
 /* for KVM_IRQ_LINE */
 struct kvm_irq_level {
@@ -239,8 +247,7 @@ struct kvm_tdx_exit {
 	union {
 		struct kvm_tdx_vmcall {
 			/*
-			 * "Guest-Host-Communication Interface(GHCI) for Intel
-			 * Trusted Domains Extensions(TDX)" specification
+			 * Guest-Host-Communication Interface for TDX spec
 			 * defines the ABI for TDG.VP.VMCALL.
 			 */
 
@@ -251,7 +258,7 @@ struct kvm_tdx_exit {
 			/*
 			 * Subfunction specific.
 			 * Registers are used in this order to pass input
-			 * arguments.  r12=in0, r13=in1, etc.
+			 * arguments.  r12=arg0, r13=arg1, etc.
 			 */
 			__u64 in_r12;
 			__u64 in_r13;
@@ -269,7 +276,7 @@ struct kvm_tdx_exit {
 			/*
 			 * Subfunction specific.
 			 * Registers are used in this order to output return
-			 * values.  r11=out0, r12=out1, etc.
+			 * values.  r11=ret0, r12=ret1, etc.
 			 */
 			__u64 out_r11;
 			__u64 out_r12;
@@ -326,6 +333,7 @@ struct kvm_tdx_exit {
 #define KVM_EXIT_XEN              34
 #define KVM_EXIT_RISCV_SBI        35
 #define KVM_EXIT_TDX              50
+#define KVM_EXIT_MEMORY_ERROR     100
 
 /* For KVM_EXIT_INTERNAL_ERROR */
 /* Emulate instruction failed. */
@@ -545,6 +553,14 @@ struct kvm_run {
 		} riscv_sbi;
 		/* KVM_EXIT_TDX */
 		struct kvm_tdx_exit tdx;
+		/* KVM_EXIT_MEMORY_ERROR */
+		struct {
+#define KVM_MEMORY_EXIT_FLAG_PRIVATE	(1 << 0)
+			__u32 flags;
+			__u32 padding;
+			__u64 gpa;
+			__u64 size;
+		} memory;
 		/* Fix the size of the union. */
 		char padding[256];
 	};
@@ -1780,10 +1796,6 @@ struct kvm_xen_vcpu_attr {
 #define KVM_XEN_VCPU_ATTR_TYPE_RUNSTATE_CURRENT	0x3
 #define KVM_XEN_VCPU_ATTR_TYPE_RUNSTATE_DATA	0x4
 #define KVM_XEN_VCPU_ATTR_TYPE_RUNSTATE_ADJUST	0x5
-
-/* Read/write encrypted guest memory, for guest debugging support in QEMU*/
-#define KVM_MEMORY_ENCRYPT_READ_MEMORY  _IOW(KVMIO, 0xcc, struct kvm_rw_memory)
-#define KVM_MEMORY_ENCRYPT_WRITE_MEMORY _IOW(KVMIO, 0xcd, struct kvm_rw_memory)
 
 /* Secure Encrypted Virtualization command */
 enum sev_cmd_id {
