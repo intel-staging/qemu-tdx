@@ -154,6 +154,44 @@ static KVMMSRHandlers msr_handlers[KVM_MSR_FILTER_MAX_RANGES];
 static RateLimit bus_lock_ratelimit_ctrl;
 static int kvm_get_one_msr(X86CPU *cpu, int index, uint64_t *value);
 
+static const char* vm_type_name[] = {
+    [KVM_X86_DEFAULT_VM] = "default",
+    [KVM_X86_SW_PROTECTED_VM] = "sw-protected-vm",
+};
+
+int kvm_get_vm_type(MachineState *ms, const char *vm_type)
+{
+    X86MachineState *x86ms = X86_MACHINE(ms);
+    int kvm_type = KVM_X86_DEFAULT_VM;
+
+    if (vm_type) {
+        if (!g_ascii_strcasecmp(vm_type, "default") || !g_ascii_strcasecmp(vm_type, "")) {
+            kvm_type = KVM_X86_DEFAULT_VM;
+        } else if (!g_ascii_strcasecmp(vm_type, "sw-protected-vm")) {
+            kvm_type = KVM_X86_SW_PROTECTED_VM;
+        } else {
+            error_report("Unknown kvm-type specified '%s'", vm_type);
+            exit(1);
+        }
+    }
+
+    /*
+     * old KVM doesn't support KVM_CAP_VM_TYPES and KVM_X86_DEFAULT_VM
+     * is always supported
+     */
+    if (kvm_type == KVM_X86_DEFAULT_VM) {
+        return kvm_type;
+    }
+
+    if (!(kvm_check_extension(KVM_STATE(ms->accelerator), KVM_CAP_VM_TYPES) & BIT(kvm_type))) {
+        error_report("vm-type %s not supported by KVM", vm_type_name[kvm_type]);
+        exit(1);
+    }
+
+    x86ms->vm_type = kvm_type;
+    return kvm_type;
+}
+
 int kvm_has_pit_state2(void)
 {
     return has_pit_state2;

@@ -42,6 +42,9 @@ struct X86MachineState {
 
     /*< public >*/
 
+    char *kvm_type;
+    unsigned int vm_type;
+
     /* Pointers to devices and objects: */
     ISADevice *rtc;
     FWCfgState *fw_cfg;
@@ -91,6 +94,7 @@ struct X86MachineState {
 #define X86_MACHINE_OEM_ID           "x-oem-id"
 #define X86_MACHINE_OEM_TABLE_ID     "x-oem-table-id"
 #define X86_MACHINE_BUS_LOCK_RATELIMIT  "bus-lock-ratelimit"
+#define X86_MACHINE_KVM_TYPE         "kvm-type"
 
 #define TYPE_X86_MACHINE   MACHINE_TYPE_NAME("x86")
 OBJECT_DECLARE_TYPE(X86MachineState, X86MachineClass, X86_MACHINE)
