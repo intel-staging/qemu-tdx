@@ -32,6 +32,7 @@
 #include "sysemu/runstate.h"
 #include "kvm_i386.h"
 #include "sev.h"
+#include "tdx.h"
 #include "xen-emu.h"
 #include "hyperv.h"
 #include "hyperv-proto.h"
@@ -158,6 +159,7 @@ static int kvm_get_one_msr(X86CPU *cpu, int index, uint64_t *value);
 static const char* vm_type_name[] = {
     [KVM_X86_DEFAULT_VM] = "default",
     [KVM_X86_SW_PROTECTED_VM] = "sw-protected-vm",
+    [KVM_X86_TDX_VM] = "tdx",
 };
 
 int kvm_get_vm_type(MachineState *ms, const char *vm_type)
@@ -170,10 +172,16 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
             kvm_type = KVM_X86_DEFAULT_VM;
         } else if (!g_ascii_strcasecmp(vm_type, "sw-protected-vm")) {
             kvm_type = KVM_X86_SW_PROTECTED_VM;
-        } else {
+        } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
+            kvm_type = KVM_X86_TDX_VM;
+        }else {
             error_report("Unknown kvm-type specified '%s'", vm_type);
             exit(1);
         }
+    }
+
+    if (ms->cgs && object_dynamic_cast(OBJECT(ms->cgs), TYPE_TDX_GUEST)) {
+        kvm_type = KVM_X86_TDX_VM;
     }
 
     /*
