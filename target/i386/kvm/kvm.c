@@ -2112,6 +2112,9 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
 int kvm_arch_pre_create_vcpu(CPUState *cpu)
 {
+    if (is_tdx_vm())
+        return tdx_pre_create_vcpu(cpu);
+
     return 0;
 }
 
