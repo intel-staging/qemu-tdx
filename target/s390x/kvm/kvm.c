@@ -405,6 +405,11 @@ int kvm_arch_init_vcpu(CPUState *cs)
     return 0;
 }
 
+int kvm_arch_pre_create_vcpu(CPUState *cpu)
+{
+    return 0;
+}
+
 int kvm_arch_destroy_vcpu(CPUState *cs)
 {
     S390CPU *cpu = S390_CPU(cs);
