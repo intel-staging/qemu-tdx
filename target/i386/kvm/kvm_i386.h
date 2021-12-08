@@ -13,6 +13,8 @@
 
 #include "sysemu/kvm.h"
 
+#define KVM_MAX_CPUID_ENTRIES  100
+
 #define kvm_apic_in_kernel() (kvm_irqchip_in_kernel())
 
 #ifdef CONFIG_KVM
