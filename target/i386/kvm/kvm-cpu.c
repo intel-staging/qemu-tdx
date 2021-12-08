@@ -67,7 +67,8 @@ static bool lmce_supported(void)
 {
     uint64_t mce_cap = 0;
 
-    if (kvm_ioctl(kvm_state, KVM_X86_GET_MCE_CAP_SUPPORTED, &mce_cap) < 0) {
+    if (kvm_vm_ioctl(kvm_state, KVM_X86_GET_MCE_CAP_SUPPORTED, &mce_cap) < 0 &&
+        kvm_ioctl(kvm_state, KVM_X86_GET_MCE_CAP_SUPPORTED, &mce_cap) < 0) {
         return false;
     }
     return !!(mce_cap & MCG_LMCE_P);

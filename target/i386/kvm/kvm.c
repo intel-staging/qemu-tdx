@@ -589,10 +589,13 @@ static int kvm_get_mce_cap_supported(KVMState *s, uint64_t *mce_cap,
 {
     int r;
 
-    r = kvm_check_extension(s, KVM_CAP_MCE);
+    r = kvm_vm_check_extension(s, KVM_CAP_MCE);
     if (r > 0) {
         *max_banks = r;
-        return kvm_ioctl(s, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
+        r = kvm_vm_ioctl(s, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
+        if (r < 0)
+            return kvm_ioctl(s, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
+
     }
     return -ENOSYS;
 }
@@ -2003,7 +2006,7 @@ int kvm_arch_init_vcpu(CPUState *cs)
     if (((env->cpuid_version >> 8)&0xF) >= 6
         && (env->features[FEAT_1_EDX] & (CPUID_MCE | CPUID_MCA)) ==
            (CPUID_MCE | CPUID_MCA)
-        && kvm_check_extension(cs->kvm_state, KVM_CAP_MCE) > 0
+        && kvm_vm_check_extension(cs->kvm_state, KVM_CAP_MCE) > 0
         && vm_type != KVM_X86_TDX_VM) {
         uint64_t mcg_cap, unsupported_caps;
         int banks;
