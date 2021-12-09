@@ -32,11 +32,15 @@
 #define MFD_HUGE_SHIFT 26
 #endif
 
+#ifndef MFD_INACCESSIBLE
+#define MFD_INACCESSIBLE 0x0008U
+#endif
+
 #if defined CONFIG_LINUX && !defined CONFIG_MEMFD
 int memfd_create(const char *name, unsigned int flags);
 #endif
 
-int qemu_memfd_create(const char *name, size_t size, bool hugetlb,
+int qemu_memfd_create(const char *name, size_t size, bool private, bool hugetlb,
                       uint64_t hugetlbsize, unsigned int seals, Error **errp);
 bool qemu_memfd_alloc_check(void);
 void *qemu_memfd_alloc(const char *name, size_t size, unsigned int seals,
