@@ -831,6 +831,16 @@
             '*kernel-hashes': 'bool' } }
 
 ##
+# @TdxGuestProperties:
+#
+# Properties for tdx-guest objects.
+#
+# Since: 7.2
+##
+{ 'struct': 'TdxGuestProperties',
+  'data': { }}
+
+##
 # @ObjectType:
 #
 # Features:
@@ -883,6 +893,7 @@
       'if': 'CONFIG_SECRET_KEYRING' },
     'sev-guest',
     's390-pv-guest',
+    'tdx-guest',
     'throttle-group',
     'tls-creds-anon',
     'tls-creds-psk',
@@ -948,6 +959,7 @@
       'secret_keyring':             { 'type': 'SecretKeyringProperties',
                                       'if': 'CONFIG_SECRET_KEYRING' },
       'sev-guest':                  'SevGuestProperties',
+      'tdx-guest':                  'TdxGuestProperties',
       'throttle-group':             'ThrottleGroupProperties',
       'tls-creds-anon':             'TlsCredsAnonProperties',
       'tls-creds-psk':              'TlsCredsPskProperties',
