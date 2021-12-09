@@ -46,7 +46,7 @@ int memfd_create(const char *name, unsigned int flags)
 }
 #endif
 
-int qemu_memfd_create(const char *name, size_t size, bool hugetlb,
+int qemu_memfd_create(const char *name, size_t size, bool private, bool hugetlb,
                       uint64_t hugetlbsize, unsigned int seals, Error **errp)
 {
     int htsize = hugetlbsize ? ctz64(hugetlbsize) : 0;
@@ -62,6 +62,9 @@ int qemu_memfd_create(const char *name, size_t size, bool hugetlb,
     int mfd = -1;
     unsigned int flags = MFD_CLOEXEC;
 
+    if (private) {
+        flags |= MFD_INACCESSIBLE;
+    }
     if (seals) {
         flags |= MFD_ALLOW_SEALING;
     }
@@ -108,11 +111,11 @@ void *qemu_memfd_alloc(const char *name, size_t size, unsigned int seals,
                        int *fd, Error **errp)
 {
     void *ptr;
-    int mfd = qemu_memfd_create(name, size, false, 0, seals, NULL);
+    int mfd = qemu_memfd_create(name, size, false, false, 0, seals, NULL);
 
     /* some systems have memfd without sealing */
     if (mfd == -1) {
-        mfd = qemu_memfd_create(name, size, false, 0, 0, NULL);
+        mfd = qemu_memfd_create(name, size, false, false, 0, 0, NULL);
     }
 
     if (mfd == -1) {

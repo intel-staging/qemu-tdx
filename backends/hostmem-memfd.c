@@ -44,7 +44,7 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
         return;
     }
 
-    fd = qemu_memfd_create(TYPE_MEMORY_BACKEND_MEMFD, backend->size,
+    fd = qemu_memfd_create(TYPE_MEMORY_BACKEND_MEMFD, backend->size, false,
                            m->hugetlb, m->hugetlbsize, m->seal ?
                            F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL : 0,
                            errp);
