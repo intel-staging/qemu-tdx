@@ -911,6 +911,16 @@
             '*kernel-hashes': 'bool' } }
 
 ##
+# @TdxGuestProperties:
+#
+# Properties for tdx-guest objects.
+#
+# Since: 9.1
+##
+{ 'struct': 'TdxGuestProperties',
+  'data': { }}
+
+##
 # @ThreadContextProperties:
 #
 # Properties for thread context objects.
@@ -990,6 +1000,7 @@
     'sev-guest',
     'thread-context',
     's390-pv-guest',
+    'tdx-guest',
     'throttle-group',
     'tls-creds-anon',
     'tls-creds-psk',
@@ -1058,6 +1069,7 @@
       'secret_keyring':             { 'type': 'SecretKeyringProperties',
                                       'if': 'CONFIG_SECRET_KEYRING' },
       'sev-guest':                  'SevGuestProperties',
+      'tdx-guest':                  'TdxGuestProperties',
       'thread-context':             'ThreadContextProperties',
       'throttle-group':             'ThrottleGroupProperties',
       'tls-creds-anon':             'TlsCredsAnonProperties',
