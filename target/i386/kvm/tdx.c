@@ -356,6 +356,7 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         error_report("KVM_TDX_FINALIZE_VM failed %s", strerror(-r));
         exit(0);
     }
+    //kvm_mark_guest_state_protected();
     CONFIDENTIAL_GUEST_SUPPORT(tdx_guest)->ready = true;
 }
 
