@@ -302,9 +302,22 @@ static Notifier tdx_machine_done_notify = {
 
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
+    X86MachineState *x86ms = X86_MACHINE(ms);
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
     if (!tdx) {
+        return -EINVAL;
+    }
+
+    if (!kvm_enable_x2apic()) {
+        error_setg(errp, "Failed to enable x2apic in KVM");
+        return -EINVAL;
+    }
+
+    if (x86ms->smm == ON_OFF_AUTO_AUTO) {
+        x86ms->smm = ON_OFF_AUTO_OFF;
+    } else if (x86ms->smm == ON_OFF_AUTO_ON) {
+        error_setg(errp, "TDX VM doesn't support SMM");
         return -EINVAL;
     }
 
