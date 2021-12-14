@@ -19,6 +19,14 @@
 #include "hw/i386/x86.h"
 #include "tdx.h"
 
+static TdxGuest *tdx_guest;
+
+/* It's valid after kvm_confidential_guest_init()->kvm_tdx_init() */
+bool is_tdx_vm(void)
+{
+    return !!tdx_guest;
+}
+
 enum tdx_ioctl_level{
     TDX_VM_IOCTL,
     TDX_VCPU_IOCTL,
@@ -96,6 +104,8 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     if (!tdx_caps) {
         get_tdx_capabilities();
     }
+
+    tdx_guest = tdx;
 
     return 0;
 }
