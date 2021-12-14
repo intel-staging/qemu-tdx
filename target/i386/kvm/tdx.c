@@ -20,7 +20,15 @@
 #include "kvm_i386.h"
 #include "tdx.h"
 
+static TdxGuest *tdx_guest;
+
 static struct kvm_tdx_capabilities *tdx_caps;
+
+/* It's valid after kvm_arch_init()->kvm_tdx_init() */
+bool is_tdx_vm(void)
+{
+    return !!tdx_guest;
+}
 
 enum tdx_ioctl_level{
     TDX_VM_IOCTL,
@@ -111,15 +119,20 @@ static int tdx_kvm_type(X86ConfidentialGuest *cg)
 static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = TDX_GUEST(cgs);
     int r = 0;
 
     ms->require_guest_memfd = true;
 
     if (!tdx_caps) {
         r = get_tdx_capabilities(errp);
+        if (r) {
+            return r;
+        }
     }
 
-    return r;
+    tdx_guest = tdx;
+    return 0;
 }
 
 /* tdx guest */
