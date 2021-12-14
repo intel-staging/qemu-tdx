@@ -14,10 +14,21 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
+#include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/kvm.h"
 
 #include "hw/i386/x86.h"
 #include "tdx.h"
+
+#define TDX_SUPPORTED_KVM_FEATURES  ((1ULL << KVM_FEATURE_NOP_IO_DELAY) | \
+                                     (1ULL << KVM_FEATURE_STEAL_TIME) | \
+                                     (1ULL << KVM_FEATURE_PV_EOI) | \
+                                     (1ULL << KVM_FEATURE_PV_UNHALT) | \
+                                     (1ULL << KVM_FEATURE_PV_TLB_FLUSH) | \
+                                     (1ULL << KVM_FEATURE_PV_SEND_IPI) | \
+                                     (1ULL << KVM_FEATURE_POLL_CONTROL) | \
+                                     (1ULL << KVM_FEATURE_PV_SCHED_YIELD) | \
+                                     (1ULL << KVM_FEATURE_MSI_EXT_DEST_ID))
 
 static TdxGuest *tdx_guest;
 
@@ -119,6 +130,39 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     tdx_guest = tdx;
 
     return 0;
+}
+
+void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
+                             uint32_t *ret)
+{
+    switch (function) {
+    case 1:
+        if (reg == R_ECX) {
+            *ret &= ~CPUID_EXT_VMX;
+        }
+        break;
+    case 0xd:
+        if (index == 0) {
+            if (reg == R_EAX) {
+                *ret &= (uint32_t)tdx_caps->xfam_fixed0 & XCR0_MASK;
+                *ret |= (uint32_t)tdx_caps->xfam_fixed1 & XCR0_MASK;
+            } else if (reg == R_EDX) {
+                *ret &= (tdx_caps->xfam_fixed0 & XCR0_MASK) >> 32;
+                *ret |= (tdx_caps->xfam_fixed1 & XCR0_MASK) >> 32;
+            }
+        } else if (index == 1) {
+            /* TODO: Adjust XSS when it's supported. */
+        }
+        break;
+    case KVM_CPUID_FEATURES:
+        if (reg == R_EAX) {
+            *ret &= TDX_SUPPORTED_KVM_FEATURES;
+        }
+        break;
+    default:
+        /* TODO: Use tdx_caps to adjust CPUID leafs. */
+        break;
+    }
 }
 
 /* tdx guest */
