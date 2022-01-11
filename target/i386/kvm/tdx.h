@@ -48,6 +48,9 @@ typedef struct TdxGuest {
 
     bool initialized;
     bool debug;
+    bool sept_ve_disable;
+    bool pks;
+    bool kl;
     uint8_t mrconfigid[48];     /* sha348 digest */
     uint8_t mrowner[48];        /* sha348 digest */
     uint8_t mrownerconfig[48];  /* sha348 digest */

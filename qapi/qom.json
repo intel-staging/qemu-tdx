@@ -799,6 +799,9 @@
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*debug': 'bool',
+            '*sept-ve-disable': 'bool',
+            '*pks': 'bool',
+            '*kl': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
