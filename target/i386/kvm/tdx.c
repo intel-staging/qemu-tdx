@@ -42,6 +42,8 @@
 #include "hw/i386/ich9.h"
 
 #define TDX1_TD_ATTRIBUTE_DEBUG BIT_ULL(0)
+#define TDX1_TD_ATTRIBUTE_SEPT_VE_DISABLE       BIT_ULL(28)
+#define TDX1_TD_ATTRIBUTE_PKS                   BIT_ULL(30)
 #define TDX1_TD_ATTRIBUTE_PERFMON BIT_ULL(63)
 #define TDX1_MIN_TSC_FREQUENCY_KHZ (100 * 1000)
 #define TDX1_MAX_TSC_FREQUENCY_KHZ (10 * 1000 * 1000)
@@ -882,6 +884,9 @@ void tdx_pre_create_vcpu(CPUState *cpu)
     init_vm.tsc_khz = env->tsc_khz;
     init_vm.attributes = 0;
     init_vm.attributes |= tdx->debug ? TDX1_TD_ATTRIBUTE_DEBUG : 0;
+    init_vm.attributes |= tdx->sept_ve_disable ? TDX1_TD_ATTRIBUTE_SEPT_VE_DISABLE : 0;
+    init_vm.attributes |= (env->features[FEAT_7_0_ECX] & CPUID_7_0_ECX_PKS) ?
+        TDX1_TD_ATTRIBUTE_PKS : 0;
     init_vm.attributes |= x86cpu->enable_pmu ? TDX1_TD_ATTRIBUTE_PERFMON : 0;
 
     QEMU_BUILD_BUG_ON(sizeof(init_vm.mrconfigid) != sizeof(tdx->mrconfigid));
@@ -933,6 +938,20 @@ static void tdx_guest_set_debug(Object *obj, bool value, Error **errp)
     tdx->debug = value;
 }
 
+static bool tdx_guest_get_sept_ve_disable(Object *obj, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    return tdx->sept_ve_disable;
+}
+
+static void tdx_guest_set_sept_ve_disable(Object *obj, bool value, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    tdx->sept_ve_disable = value;
+}
+
 static char *tdx_guest_get_quote_generation(
     Object *obj, Error **errp)
 {
@@ -970,8 +989,12 @@ static void tdx_guest_init(Object *obj)
     reboot_action = REBOOT_ACTION_SHUTDOWN;
 
     tdx->debug = false;
+    tdx->sept_ve_disable = false;
     object_property_add_bool(obj, "debug", tdx_guest_get_debug,
                              tdx_guest_set_debug);
+    object_property_add_bool(obj, "sept-ve-disable",
+                             tdx_guest_get_sept_ve_disable,
+                             tdx_guest_set_sept_ve_disable);
     object_property_add_sha384(obj, "mrconfigid", tdx->mrconfigid,
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_sha384(obj, "mrowner", tdx->mrowner,
