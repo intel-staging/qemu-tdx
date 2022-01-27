@@ -261,6 +261,10 @@ out:
     qemu_mutex_unlock(&tdx_guest->lock);
     return r;
 }
+int tdx_parse_tdvf(void *flash_ptr, int size)
+{
+    return tdvf_parse_metadata(&tdx_guest->tdvf, flash_ptr, size);
+}
 
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
