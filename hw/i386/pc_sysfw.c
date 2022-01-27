@@ -245,7 +245,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
         /* Machine property pflash0 not set, use ROM mode */
         x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
     } else {
-        if (kvm_enabled() && !kvm_readonly_mem_enabled()) {
+        if (kvm_enabled() && (!kvm_readonly_mem_enabled() && !is_tdx_vm())) {
             /*
              * Older KVM cannot execute from device memory. So, flash
              * memory cannot be used unless the readonly memory kvm
