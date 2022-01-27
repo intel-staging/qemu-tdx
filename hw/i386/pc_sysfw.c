@@ -200,15 +200,16 @@ static void pc_system_flash_map(PCMachineState *pcms,
         if (i == 0) {
             pc_isa_bios_init(rom_memory, flash_mem, size);
 
+            flash_ptr = memory_region_get_ram_ptr(flash_mem);
+            flash_size = memory_region_size(flash_mem);
+            /*
+             * OVMF places a GUIDed structures in the flash, so
+             * search for them
+             */
+            pc_system_parse_ovmf_flash(flash_ptr, flash_size);
+
             /* Encrypt the pflash boot ROM */
             if (sev_enabled()) {
-                flash_ptr = memory_region_get_ram_ptr(flash_mem);
-                flash_size = memory_region_size(flash_mem);
-                /*
-                 * OVMF places a GUIDed structures in the flash, so
-                 * search for them
-                 */
-                pc_system_parse_ovmf_flash(flash_ptr, flash_size);
 
                 ret = sev_es_save_reset_vector(flash_ptr, flash_size);
                 if (ret) {
@@ -217,6 +218,12 @@ static void pc_system_flash_map(PCMachineState *pcms,
                 }
 
                 sev_encrypt_flash(flash_ptr, flash_size, &error_fatal);
+            } else if (is_tdx_vm()) {
+                ret = tdx_parse_tdvf(flash_ptr, flash_size);
+                if (ret) {
+                    error_report("failed to parse TDVF in pflash for TDX VM");
+                    exit(1);
+                }
             }
         }
     }
