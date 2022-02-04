@@ -180,9 +180,7 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     tdx_cmd.metadata = metadata;
     tdx_cmd.data = (__u64)(unsigned long)data;
 
-    if (ioctl_no == KVM_TDX_CAPABILITIES) {
-        r = kvm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
-    } else if (ioctl_no == KVM_TDX_INIT_VCPU) {
+    if (ioctl_no == KVM_TDX_INIT_VCPU) {
         r = kvm_vcpu_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     } else {
         r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
