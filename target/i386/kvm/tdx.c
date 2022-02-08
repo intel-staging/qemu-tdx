@@ -185,6 +185,14 @@ static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     } else {
         r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     }
+    /*
+     * REVERTME: Workaround for incompatible ABI change.  KVM_TDX_CAPABILITIES
+     * was changed from system ioctl to VM ioctl.  Make KVM_TDX_CAPABILITIES
+     * work with old ABI.
+     */
+    if (r && ioctl_no == KVM_TDX_CAPABILITIES) {
+        r = kvm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+    }
     if (r) {
         error_report("%s failed: %s", ioctl_name, strerror(-r));
         exit(1);
