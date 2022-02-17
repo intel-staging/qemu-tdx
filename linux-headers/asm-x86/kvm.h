@@ -503,7 +503,7 @@ struct kvm_pmu_event_filter {
 #define KVM_PMU_EVENT_ALLOW 0
 #define KVM_PMU_EVENT_DENY 1
 
-#define KVM_X86_LEGACY_VM	0
+#define KVM_X86_DEFAULT_VM	0
 #define KVM_X86_TDX_VM		1
 
 /* Trust Domain eXtension command*/
