@@ -142,7 +142,7 @@ static int vm_type;
 
 int kvm_set_vm_type(MachineState *ms, int kvm_type)
 {
-    if (kvm_type == KVM_X86_LEGACY_VM ||
+    if (kvm_type == KVM_X86_DEFAULT_VM ||
         (kvm_type == KVM_X86_TDX_VM &&
          kvm_has_tdx(KVM_STATE(ms->accelerator)))) {
         vm_type = kvm_type;

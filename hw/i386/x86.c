@@ -1392,8 +1392,8 @@ static int x86_kvm_type(MachineState *ms, const char *vm_type)
     int kvm_type;
 
     if (!vm_type || !strcmp(vm_type, "") ||
-        !g_ascii_strcasecmp(vm_type, "legacy")) {
-        kvm_type = KVM_X86_LEGACY_VM;
+        !g_ascii_strcasecmp(vm_type, "default")) {
+        kvm_type = KVM_X86_DEFAULT_VM;
     } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
         kvm_type = KVM_X86_TDX_VM;
         X86_MACHINE(ms)->eoi_intercept_unsupported = true;
