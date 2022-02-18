@@ -792,10 +792,13 @@
 #
 # @attributes: TDX guest's attributes (default: 0)
 #
+# @sept-ve-disable: attributes.sept-ve-disable[bit 28] (default: 0)
+#
 # Since: 7.0
 ##
 { 'struct': 'TdxGuestProperties',
-  'data': { '*attributes': 'uint64' } }
+  'data': { '*attributes': 'uint64',
+            '*sept-ve-disable': 'bool' } }
 
 ##
 # @ObjectType:
