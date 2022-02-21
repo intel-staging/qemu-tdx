@@ -388,6 +388,8 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
         return -EOPNOTSUPP;
     }
 
+    x86ms->eoi_intercept_unsupported = true;
+
     /*
      * Set kvm_readonly_mem_allowed to false, because TDX only supports readonly
      * memory for shared memory but not for private memory. Besides, whether a
