@@ -1,6 +1,14 @@
 #ifndef QEMU_TDX_H
 #define QEMU_TDX_H
 
+/*
+ * REVERTME: KVM_X86_TDX_VM was changed from 2 to 1.
+ * Workaround to make qemu work with old value KVM_X86_TDX_VM 2 for ABI
+ * compatibility.
+ * Once the actual value is fixed for upstreaming, remove this workaround.
+ */
+#define KVM_X86_TDX_VM_OLD     2
+
 #ifndef CONFIG_USER_ONLY
 #include "sysemu/kvm.h"
 #include "hw/i386/pc.h"
