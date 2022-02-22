@@ -146,9 +146,13 @@ static int vm_type;
 
 int kvm_set_vm_type(MachineState *ms, int kvm_type)
 {
+    /*
+     * Because old kvm doesn't support KVM_CAP_VM_TYPES, report that default
+     * type is always supported.
+     */
     if (kvm_type == KVM_X86_DEFAULT_VM ||
-        (kvm_type == KVM_X86_TDX_VM &&
-         kvm_has_tdx(KVM_STATE(ms->accelerator)))) {
+        (kvm_check_extension(KVM_STATE(ms->accelerator), KVM_CAP_VM_TYPES) &
+         BIT(kvm_type))) {
         vm_type = kvm_type;
         return 0;
     }
