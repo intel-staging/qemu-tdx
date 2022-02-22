@@ -162,7 +162,8 @@ TDXCapability *tdx_get_capabilities(void)
 
     cap = g_new0(TDXCapability, 1);
     cap->enabled = kvm_enabled() &&
-        !!(kvm_check_extension(kvm_state, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
+        !!(kvm_check_extension(kvm_state, KVM_CAP_VM_TYPES) &
+           (BIT(KVM_X86_TDX_VM) | BIT(KVM_X86_TDX_VM_OLD)));
     return cap;
 }
 
