@@ -271,7 +271,7 @@ void kvm_synchronize_all_tsc(void)
 {
     CPUState *cpu;
 
-    if (kvm_enabled() && vm_type != KVM_X86_TDX_VM) {
+    if (kvm_enabled() && !kvm_tdx_enabled()) {
         CPU_FOREACH(cpu) {
             run_on_cpu(cpu, do_kvm_synchronize_tsc, RUN_ON_CPU_NULL);
         }
@@ -826,7 +826,7 @@ static int kvm_arch_set_tsc_khz(CPUState *cs)
      * TD guest's TSC is immutable, it cannot be set/changed via
      * KVM_SET_TSC_KHZ, but only be initialized via KVM_TDX_INIT_VM
      */
-    if (vm_type == KVM_X86_TDX_VM) {
+    if (kvm_tdx_enabled()) {
         return 0;
     }
 
@@ -2007,7 +2007,7 @@ int kvm_arch_init_vcpu(CPUState *cs)
         && (env->features[FEAT_1_EDX] & (CPUID_MCE | CPUID_MCA)) ==
            (CPUID_MCE | CPUID_MCA)
         && kvm_vm_check_extension(cs->kvm_state, KVM_CAP_MCE) > 0
-        && vm_type != KVM_X86_TDX_VM) {
+        && !kvm_tdx_enabled()) {
         uint64_t mcg_cap, unsupported_caps;
         int banks;
         int ret;
@@ -2267,7 +2267,7 @@ static int kvm_get_supported_msrs(KVMState *s)
          * FIXME: more sanitize for TDX
          * TODO: introduce VM ioctl of KVM_GET_MSR_INDEX_LIST
          */
-        if (vm_type == KVM_X86_TDX_VM && ret >= 0) {
+        if (kvm_tdx_enabled() && ret >= 0) {
             __u32 nmsrs = 0;
             for (i = 0; i < kvm_msr_list->nmsrs; i++) {
                 switch (kvm_msr_list->indices[i]) {
@@ -2871,7 +2871,7 @@ void kvm_put_apicbase(X86CPU *cpu, uint64_t value)
     int ret;
 
     /* TODO: Allow accessing guest state for debug TDs. */
-    if (vm_type == KVM_X86_TDX_VM) {
+    if (kvm_tdx_enabled()) {
             return;
     }
 
@@ -4430,12 +4430,12 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
      * level == KVM_PUT_FULL_STATE is only set by
      * kvm_cpu_synchronize_post_init() after initialization
      */
-    if (vm_type == KVM_X86_TDX_VM && level == KVM_PUT_FULL_STATE) {
+    if (kvm_tdx_enabled() && level == KVM_PUT_FULL_STATE) {
         tdx_post_init_vcpu(cpu);
     }
 
     /* TODO: Allow accessing guest state for debug TDs. */
-    if (vm_type == KVM_X86_TDX_VM) {
+    if (kvm_tdx_enabled()) {
         CPUX86State *env = &x86_cpu->env;
         MachineState *ms = MACHINE(qdev_get_machine());
         TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
@@ -4563,7 +4563,7 @@ int kvm_arch_get_registers(CPUState *cs)
     if (ret < 0) {
         goto out;
     }
-    if (vm_type != KVM_X86_TDX_VM) {
+    if (!kvm_tdx_enabled()) {
         ret = kvm_get_msrs(cpu);
         if (ret < 0) {
             goto out;
