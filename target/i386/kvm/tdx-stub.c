@@ -3,11 +3,6 @@
 #include "sysemu/tdx.h"
 
 #ifndef CONFIG_USER_ONLY
-bool kvm_has_tdx(KVMState *s)
-{
-        return false;
-}
-
 int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
 {
     return -ENOSYS;
