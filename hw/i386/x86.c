@@ -41,6 +41,7 @@
 #include "sysemu/replay.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/cpu-timers.h"
+#include "sysemu/tdx.h"
 #include "trace.h"
 
 #include "hw/i386/x86.h"
@@ -1390,7 +1391,17 @@ static int x86_kvm_type(MachineState *ms, const char *vm_type)
         error_report("Unknown kvm-type specified '%s'", vm_type);
         exit(1);
     }
+retry:
     if (kvm_set_vm_type(ms, kvm_type)) {
+        if (kvm_type == KVM_X86_TDX_VM) {
+            /*
+             * REVERTME: workaround for ABI compatibility. with old
+             * KVM_CAP_VM_TYPE ABI, KVM_X86_TDX_VM_OLD=2 was used.
+             * If KVM_X86_TDX_VM=1 isn't supported, try old one.
+             */
+            kvm_type = KVM_X86_TDX_VM_OLD;
+            goto retry;
+        }
         error_report("kvm-type '%s' not supported by KVM", vm_type);
         exit(1);
     }

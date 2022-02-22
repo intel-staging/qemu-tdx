@@ -162,7 +162,7 @@ int kvm_set_vm_type(MachineState *ms, int kvm_type)
 
 bool kvm_tdx_enabled(void)
 {
-    return vm_type == KVM_X86_TDX_VM;
+    return vm_type == KVM_X86_TDX_VM || vm_type == KVM_X86_TDX_VM_OLD;
 }
 
 int kvm_has_pit_state2(void)
