@@ -147,11 +147,6 @@ static kvm_tdx_cpuid_lookup tdx_cpuid_lookup[FEATURE_WORDS] = {
     },
 };
 
-bool kvm_has_tdx(KVMState *s)
-{
-    return !!(kvm_check_extension(s, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
-}
-
 TDXInfo *tdx_get_info(void)
 {
     TDXInfo *info;
@@ -166,7 +161,8 @@ TDXCapability *tdx_get_capabilities(void)
     TDXCapability *cap;
 
     cap = g_new0(TDXCapability, 1);
-    cap->enabled = kvm_enabled() && kvm_has_tdx(kvm_state);
+    cap->enabled = kvm_enabled() &&
+        !!(kvm_check_extension(kvm_state, KVM_CAP_VM_TYPES) & BIT(KVM_X86_TDX_VM));
     return cap;
 }
 
