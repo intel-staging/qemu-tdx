@@ -42,6 +42,10 @@ typedef struct TdxFirmwareEntry {
 } TdxFirmwareEntry;
 
 typedef struct TdxFirmware {
+    bool split_tdvf;
+    void *code_ptr;
+    void *vars_ptr;
+
     uint32_t nr_entries;
     TdxFirmwareEntry *entries;
 } TdxFirmware;

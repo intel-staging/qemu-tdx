@@ -147,8 +147,8 @@ static void pc_system_flash_map(PCMachineState *pcms,
     int64_t size;
     PFlashCFI01 *system_flash;
     MemoryRegion *flash_mem;
-    void *flash_ptr;
-    int flash_size;
+    void *flash_ptr[2] = {NULL, NULL};
+    int flash_size[2];
     int ret;
 
     assert(PC_MACHINE_GET_CLASS(pcms)->pci_enabled);
@@ -197,35 +197,39 @@ static void pc_system_flash_map(PCMachineState *pcms,
                             0x100000000ULL - total_size);
         }
 
+        flash_ptr[i] = memory_region_get_ram_ptr(flash_mem);
+        flash_size[i] = memory_region_size(flash_mem);
         if (i == 0) {
             pc_isa_bios_init(rom_memory, flash_mem, size);
 
-            flash_ptr = memory_region_get_ram_ptr(flash_mem);
-            flash_size = memory_region_size(flash_mem);
             /*
              * OVMF places a GUIDed structures in the flash, so
              * search for them
              */
-            pc_system_parse_ovmf_flash(flash_ptr, flash_size);
+            pc_system_parse_ovmf_flash(flash_ptr[i], flash_size[i]);
 
             /* Encrypt the pflash boot ROM */
             if (sev_enabled()) {
 
-                ret = sev_es_save_reset_vector(flash_ptr, flash_size);
+                ret = sev_es_save_reset_vector(flash_ptr[i], flash_size[i]);
                 if (ret) {
                     error_report("failed to locate and/or save reset vector");
                     exit(1);
                 }
 
-                sev_encrypt_flash(flash_ptr, flash_size, &error_fatal);
+                sev_encrypt_flash(flash_ptr[i], flash_size[i], &error_fatal);
             } else if (is_tdx_vm()) {
-                ret = tdx_parse_tdvf(flash_ptr, flash_size);
+                ret = tdx_parse_tdvf(flash_ptr[i], flash_size[i]);
                 if (ret) {
                     error_report("failed to parse TDVF in pflash for TDX VM");
                     exit(1);
                 }
             }
         }
+    }
+
+    if (is_tdx_vm()) {
+        tdx_set_code_vars_ptr(flash_ptr[0], flash_ptr[1]);
     }
 }
 

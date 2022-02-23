@@ -37,5 +37,6 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu);
 int tdx_parse_tdvf(void *flash_ptr, int size);
+void tdx_set_code_vars_ptr(void *code_ptr, void *vars_ptr);
 
 #endif /* QEMU_I386_TDX_H */

@@ -265,6 +265,13 @@ int tdx_parse_tdvf(void *flash_ptr, int size)
     return tdvf_parse_metadata(&tdx_guest->tdvf, flash_ptr, size);
 }
 
+void tdx_set_code_vars_ptr(void *code_ptr, void *vars_ptr)
+{
+    tdx_guest->tdvf.code_ptr = code_ptr;
+    tdx_guest->tdvf.vars_ptr = vars_ptr;
+    tdx_guest->tdvf.split_tdvf = vars_ptr ? true : false;
+}
+
 static bool tdx_guest_get_sept_ve_disable(Object *obj, Error **errp)
 {
     TdxGuest *tdx = TDX_GUEST(obj);

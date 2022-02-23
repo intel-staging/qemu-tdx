@@ -17,3 +17,8 @@ int tdx_parse_tdvf(void *flash_ptr, int size)
 {
     return -EINVAL;
 }
+
+void tdx_set_code_vars_ptr(void *code_ptr, void *vars_ptr)
+{
+    g_assert_not_reached();
+}
