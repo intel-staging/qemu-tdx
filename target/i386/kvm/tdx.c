@@ -16,8 +16,10 @@
 #include "qom/object_interfaces.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/kvm.h"
+#include "sysemu/sysemu.h"
 
 #include "hw/i386/x86.h"
+#include "hw/i386/tdvf.h"
 #include "kvm_i386.h"
 #include "tdx.h"
 
@@ -103,6 +105,44 @@ static void get_tdx_capabilities(void)
     tdx_caps = caps;
 }
 
+static void tdx_finalize_vm(Notifier *notifier, void *unused)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    void *base_ram_ptr = memory_region_get_ram_ptr(ms->ram);
+    TdxFirmware *tdvf = &tdx_guest->tdvf;
+    TdxFirmwareEntry *entry;
+
+    for_each_tdx_fw_entry(tdvf, entry) {
+        switch (entry->type) {
+        case TDVF_SECTION_TYPE_BFV:
+            if (tdvf->split_tdvf) {
+                entry->mem_ptr = tdvf->code_ptr;
+            } else {
+                entry->mem_ptr = tdvf->code_ptr + entry->data_offset;
+            }
+            break;
+        case TDVF_SECTION_TYPE_CFV:
+            if (tdvf->split_tdvf) {
+                entry->mem_ptr = tdvf->vars_ptr;
+            } else {
+                entry->mem_ptr = tdvf->code_ptr;
+            }
+            break;
+        case TDVF_SECTION_TYPE_TD_HOB:
+        case TDVF_SECTION_TYPE_TEMP_MEM:
+            entry->mem_ptr = base_ram_ptr + entry->address;
+            break;
+        default:
+            error_report("Unsupported TDVF section %d", entry->type);
+            exit(1);
+        }
+    }
+}
+
+static Notifier tdx_machine_done_notify = {
+    .notify = tdx_finalize_vm,
+};
+
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
@@ -123,6 +163,8 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
      * Thus, just mark readonly memory not supported for simplicity.
      */
     kvm_readonly_mem_allowed = false;
+
+    qemu_add_machine_init_done_notifier(&tdx_machine_done_notify);
 
     tdx_guest = tdx;
 

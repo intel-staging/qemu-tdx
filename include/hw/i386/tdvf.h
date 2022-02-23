@@ -39,6 +39,8 @@ typedef struct TdxFirmwareEntry {
     uint64_t size;
     uint32_t type;
     uint32_t attributes;
+
+    void *mem_ptr;
 } TdxFirmwareEntry;
 
 typedef struct TdxFirmware {
@@ -49,6 +51,9 @@ typedef struct TdxFirmware {
     uint32_t nr_entries;
     TdxFirmwareEntry *entries;
 } TdxFirmware;
+
+#define for_each_tdx_fw_entry(fw, e)    \
+    for (e = (fw)->entries; e != (fw)->entries + (fw)->nr_entries; e++)
 
 int tdvf_parse_metadata(TdxFirmware *fw, void *flash_ptr, int size);
 
