@@ -1032,6 +1032,8 @@
 #     e.g., specific to the workload rather than the run-time or OS
 #     (base64 encoded SHA384 digest).  Defaults to all zeros.
 #
+# @debug: Whether it's a debug TD or not (default: 0)
+#
 # Since: 9.2
 ##
 { 'struct': 'TdxGuestProperties',
@@ -1039,7 +1041,8 @@
             '*sept-ve-disable': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
-            '*mrownerconfig': 'str' } }
+            '*mrownerconfig': 'str',
+            '*debug': 'bool' } }
 
 ##
 # @ThreadContextProperties:
