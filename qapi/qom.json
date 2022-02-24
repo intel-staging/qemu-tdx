@@ -837,10 +837,13 @@
 #
 # @sept-ve-disable: bit 28 of TD attributes (default: 0)
 #
+# @debug: Whether it's a debug TD or not (default: 0)
+#
 # Since: 7.2
 ##
 { 'struct': 'TdxGuestProperties',
-  'data': { '*sept-ve-disable': 'bool' } }
+  'data': { '*sept-ve-disable': 'bool',
+            '*debug': 'bool' } }
 
 ##
 # @ObjectType:

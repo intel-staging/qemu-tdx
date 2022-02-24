@@ -705,10 +705,12 @@ static int tdx_validate_attributes(TdxGuest *tdx)
             return -EINVAL;
     }
 
+    /*
     if (tdx->attributes & TDX_TD_ATTRIBUTES_DEBUG) {
         error_report("Current QEMU doesn't support attributes.debug[bit 0] for TDX VM");
         return -EINVAL;
     }
+    */
 
     return 0;
 }
@@ -805,6 +807,24 @@ static void tdx_guest_set_sept_ve_disable(Object *obj, bool value, Error **errp)
     }
 }
 
+static bool tdx_guest_get_debug(Object *obj, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    return !!(tdx->attributes & TDX_TD_ATTRIBUTES_DEBUG);
+}
+
+static void tdx_guest_set_debug(Object *obj, bool value, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    if (value) {
+        tdx->attributes |= TDX_TD_ATTRIBUTES_DEBUG;
+    } else {
+        tdx->attributes &= ~TDX_TD_ATTRIBUTES_DEBUG;
+    }
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -824,6 +844,9 @@ static void tdx_guest_init(Object *obj)
     object_property_add_bool(obj, "sept-ve-disable",
                              tdx_guest_get_sept_ve_disable,
                              tdx_guest_set_sept_ve_disable);
+    object_property_add_bool(obj, "debug",
+                             tdx_guest_get_debug,
+                             tdx_guest_set_debug);
 }
 
 static void tdx_guest_finalize(Object *obj)
