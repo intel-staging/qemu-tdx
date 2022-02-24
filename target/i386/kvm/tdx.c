@@ -430,10 +430,12 @@ static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
             return -1;
     }
 
+    /*
     if (tdx->attributes & TDX_TD_ATTRIBUTES_DEBUG) {
         error_setg(errp, "Current QEMU doesn't support attributes.debug[bit 0] for TDX VM");
         return -1;
     }
+    */
 
     return 0;
 }
@@ -919,6 +921,24 @@ static void tdx_guest_set_sept_ve_disable(Object *obj, bool value, Error **errp)
     }
 }
 
+static bool tdx_guest_get_debug(Object *obj, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    return !!(tdx->attributes & TDX_TD_ATTRIBUTES_DEBUG);
+}
+
+static void tdx_guest_set_debug(Object *obj, bool value, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    if (value) {
+        tdx->attributes |= TDX_TD_ATTRIBUTES_DEBUG;
+    } else {
+        tdx->attributes &= ~TDX_TD_ATTRIBUTES_DEBUG;
+    }
+}
+
 static char * tdx_guest_get_mrconfigid(Object *obj, Error **errp)
 {
     TdxGuest *tdx = TDX_GUEST(obj);
@@ -1019,6 +1039,10 @@ static void tdx_guest_init(Object *obj)
     object_property_add_bool(obj, "sept-ve-disable",
                              tdx_guest_get_sept_ve_disable,
                              tdx_guest_set_sept_ve_disable);
+
+    object_property_add_bool(obj, "debug", tdx_guest_get_debug,
+                             tdx_guest_set_debug);
+
     object_property_add_str(obj, "mrconfigid",
                             tdx_guest_get_mrconfigid,
                             tdx_guest_set_mrconfigid);
