@@ -896,6 +896,8 @@
 #
 # @quote-generation-socket: socket address for Quote Generation Service(QGS)
 #
+# @debug: Whether it's a debug TD or not (default: 0)
+#
 # Since: 8.2
 ##
 { 'struct': 'TdxGuestProperties',
@@ -903,7 +905,8 @@
             '*mrconfigid': 'str',
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
-            '*quote-generation-socket': 'SocketAddress' } }
+            '*quote-generation-socket': 'SocketAddress',
+            '*debug': 'bool' } }
 
 ##
 # @ThreadContextProperties:
