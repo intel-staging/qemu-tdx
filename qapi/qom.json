@@ -1011,6 +1011,8 @@
 #     it, the guest will not be able to get a TD quote for
 #     attestation.
 #
+# @debug: Whether it's a debug TD or not (default: 0)
+#
 # Since: 9.1
 ##
 { 'struct': 'TdxGuestProperties',
@@ -1018,7 +1020,8 @@
             '*mrconfigid': 'str',
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
-            '*quote-generation-socket': 'SocketAddress' } }
+            '*quote-generation-socket': 'SocketAddress',
+            '*debug': 'bool' } }
 
 ##
 # @ThreadContextProperties:
