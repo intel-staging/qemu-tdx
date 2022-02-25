@@ -910,17 +910,10 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
 
 #define TDX_GET_QUOTE_STRUCTURE_VERSION 1ULL
 
-/*
- * Follow the format of TDX status code
- * 63:32: class code
- *   63: error
- *   62: recoverable
- *   47:40 class ID : 9 platform
- *   39:32: details_L1
- * 31:0: details_L2
- */
-#define TDX_GET_QUOTE_STATUS_SUCCESS    0ULL
-#define TDX_GET_QUOTE_STATUS_ERROR      0x8000090100000000ULL
+#define TDX_VP_GET_QUOTE_SUCCESS                0ULL
+#define TDX_VP_GET_QUOTE_IN_FLIGHT              (-1ULL)
+#define TDX_VP_GET_QUOTE_ERROR                  0x8000000000000000ULL
+#define TDX_VP_GET_QUOTE_QGS_UNAVAILABLE        0x8000000000000001ULL
 
 /* Limit to avoid resource starvation. */
 #define TDX_GET_QUOTE_MAX_BUF_LEN       (128 * 1024)
@@ -946,7 +939,7 @@ struct tdx_get_quote_header {
 
     /*
      * out-message size in little endian:
-     * On request, buffer size of shared page. Guest must sets.
+     * On request, out_len must be zero to avoid information leak.
      * On return, message size from QGS. Qemu overwrites this field.
      * The message will follows this header.  The in-message is overwritten.
      */
@@ -999,6 +992,7 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 struct tdx_get_quote_task {
     uint32_t apic_id;
     hwaddr gpa;
+    uint64_t buf_len;
     struct tdx_get_quote_header hdr;
     int event_notify_interrupt;
     QIOChannelSocket *ioc;
@@ -1099,8 +1093,9 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     MachineState *ms;
     TdxGuest *tdx;
 
-    t->hdr.error_code = cpu_to_le64(TDX_GET_QUOTE_STATUS_ERROR);
+    t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
     if (qio_task_propagate_error(task, NULL)) {
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
         goto error;
     }
 
@@ -1114,16 +1109,16 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     if (qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data,
                               le32_to_cpu(t->hdr.in_len), &err) ||
         err) {
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
         goto error;
     }
 
-    out_data = g_malloc(le32_to_cpu(t->hdr.out_len));
+    out_data = g_malloc(t->buf_len);
     out_len = 0;
     size = 0;
-    while (out_len < le32_to_cpu(t->hdr.out_len)) {
+    while (out_len < t->buf_len) {
         size = qio_channel_read(
-            QIO_CHANNEL(t->ioc), out_data + out_len,
-            le32_to_cpu(t->hdr.out_len) - out_len, &err);
+            QIO_CHANNEL(t->ioc), out_data + out_len, t->buf_len - out_len, &err);
         if (err) {
             break;
         }
@@ -1137,6 +1132,7 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
      * the client knows better about the QGS.
      */
     if (out_len == 0 && (err || size < 0)) {
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
         goto error;
     }
 
@@ -1150,10 +1146,10 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
      * how to interpret the zero-sized message as return message.
      */
     t->hdr.out_len = cpu_to_le32(out_len);
-    t->hdr.error_code = cpu_to_le64(TDX_GET_QUOTE_STATUS_SUCCESS);
+    t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS);
 
 error:
-    if (t->hdr.error_code != cpu_to_le64(TDX_GET_QUOTE_STATUS_SUCCESS)) {
+    if (t->hdr.error_code != cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS)) {
         t->hdr.out_len = cpu_to_le32(0);
     }
     if (address_space_write(
@@ -1181,6 +1177,7 @@ error:
 static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
     hwaddr gpa = vmcall->in_r12;
+    uint64_t buf_len = vmcall->in_r13;
     struct tdx_get_quote_header hdr;
     MachineState *ms;
     TdxGuest *tdx;
@@ -1195,8 +1192,11 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     }
     gpa &= ~tdx_shared_bit(cpu);
 
-    if (!QEMU_IS_ALIGNED(gpa, 4096)) {
+    if (!QEMU_IS_ALIGNED(gpa, 4096) || !QEMU_IS_ALIGNED(buf_len, 4096)) {
         vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
+        return;
+    }
+    if (buf_len == 0) {
         return;
     }
 
@@ -1208,17 +1208,26 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         return;
     }
     /*
-     * Paranoid: Guest should clear error_code to avoid information leak.
-     * Enforce it.  The initial value of error_code doesn't matter for qemu to
+     * Paranoid: Guest should clear error_code and out_len to avoid information
+     * leak.  Enforce it.  The initial value of them doesn't matter for qemu to
      * process the request.
      */
-    if (le64_to_cpu(hdr.error_code) != TDX_GET_QUOTE_STATUS_SUCCESS) {
+    if (le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS ||
+        le32_to_cpu(hdr.out_len) != 0) {
         return;
     }
 
     /* Only safe-guard check to avoid too large buffer size. */
-    if (le32_to_cpu(hdr.in_len) > TDX_GET_QUOTE_MAX_BUF_LEN ||
-        le32_to_cpu(hdr.out_len) > TDX_GET_QUOTE_MAX_BUF_LEN) {
+    if (buf_len > TDX_GET_QUOTE_MAX_BUF_LEN ||
+        le32_to_cpu(hdr.in_len) > TDX_GET_QUOTE_MAX_BUF_LEN ||
+        le32_to_cpu(hdr.in_len) > buf_len) {
+        return;
+    }
+
+    /* Mark the buffer in-flight. */
+    hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_IN_FLIGHT);
+    if (address_space_write(&address_space_memory, gpa, MEMTXATTRS_UNSPECIFIED,
+                            &hdr, sizeof(hdr)) != MEMTX_OK) {
         return;
     }
 
@@ -1229,6 +1238,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     t = g_malloc(sizeof(*t));
     t->apic_id = cpu->apic_id;
     t->gpa = gpa;
+    t->buf_len = buf_len;
     t->hdr = hdr;
     t->ioc = ioc;
 
