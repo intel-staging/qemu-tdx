@@ -184,6 +184,9 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     } else {
         r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     }
+
+    if (ioctl_no == KVM_TDX_CAPABILITIES && r == -E2BIG)
+        return r;
     /*
      * REVERTME: Workaround for incompatible ABI change.  KVM_TDX_CAPABILITIES
      * was changed from system ioctl to VM ioctl.  Make KVM_TDX_CAPABILITIES
@@ -266,33 +269,36 @@ static Notifier tdx_machine_done_late_notify = {
     .notify = tdx_finalize_vm,
 };
 
-#define TDX1_MAX_NR_CPUID_CONFIGS 6
-
-static struct {
-    struct kvm_tdx_capabilities __caps;
-    struct kvm_tdx_cpuid_config __cpuid_configs[TDX1_MAX_NR_CPUID_CONFIGS];
-} __tdx_caps;
-
-static struct kvm_tdx_capabilities *tdx_caps = (void *)&__tdx_caps;
+static struct kvm_tdx_capabilities *tdx_caps = NULL;
 
 #define XCR0_MASK (MAKE_64BIT_MASK(0, 8) | BIT_ULL(9) | MAKE_64BIT_MASK(17, 2))
 #define XSS_MASK (~XCR0_MASK)
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, KVMState *s, Error **errp)
 {
+    struct kvm_tdx_capabilities *caps;
+    uint32_t nr_cpuid_configs;
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(cgs),
                                                     TYPE_TDX_GUEST);
     if (!tdx) {
         return 0;
     }
 
-    QEMU_BUILD_BUG_ON(sizeof(__tdx_caps) !=
-                      sizeof(struct kvm_tdx_capabilities) +
-                      sizeof(struct kvm_tdx_cpuid_config) *
-                      TDX1_MAX_NR_CPUID_CONFIGS);
-
-    tdx_caps->nr_cpuid_configs = TDX1_MAX_NR_CPUID_CONFIGS;
-    tdx_ioctl(KVM_TDX_CAPABILITIES, 0, tdx_caps);
+    caps = NULL;
+    nr_cpuid_configs = 8;
+    while (true) {
+        int r;
+        caps = g_realloc(caps, sizeof(*caps) +
+                        sizeof(*caps->cpuid_configs) * nr_cpuid_configs);
+        caps->nr_cpuid_configs = nr_cpuid_configs;
+        r = tdx_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+        if (r == -E2BIG) {
+            nr_cpuid_configs *= 2;
+            continue;
+        }
+        break;
+    }
+    tdx_caps = caps;
 
     if (!kvm_enable_x2apic()) {
         error_report("Failed to enable x2apic in KVM");
