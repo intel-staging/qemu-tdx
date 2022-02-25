@@ -167,7 +167,7 @@ TDXCapability *tdx_get_capabilities(void)
     return cap;
 }
 
-static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
+static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
                         __u32 metadata, void *data)
 {
     struct kvm_tdx_cmd tdx_cmd;
@@ -196,6 +196,7 @@ static void __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
         error_report("%s failed: %s", ioctl_name, strerror(-r));
         exit(1);
     }
+    return 0;
 }
 #define _tdx_ioctl(cpu, ioctl_no, metadata, data) \
         __tdx_ioctl(cpu, ioctl_no, stringify(ioctl_no), metadata, data)
