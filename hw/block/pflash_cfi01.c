@@ -87,6 +87,7 @@ struct PFlashCFI01 {
     void *storage;
     VMChangeStateEntry *vmstate;
     bool old_multiple_chip_handling;
+    bool ram_mode;  /* if 1, the flash is mapped as RAM */
 };
 
 static int pflash_post_load(void *opaque, int version_id);
@@ -818,17 +819,24 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 
     total_len = pfl->sector_len * pfl->nb_blocs;
 
-    memory_region_init_rom_device(
-        &pfl->mem, OBJECT(dev),
-        &pflash_cfi01_ops,
-        pfl,
-        pfl->name, total_len, errp);
+    if (pfl->ram_mode) {
+        memory_region_init_ram(&pfl->mem, OBJECT(dev),pfl->name, total_len, errp);
+    } else {
+        memory_region_init_rom_device(
+            &pfl->mem, OBJECT(dev),
+            &pflash_cfi01_ops,
+            pfl,
+            pfl->name, total_len, errp);
+    }
     if (*errp) {
         return;
     }
 
     pfl->storage = memory_region_get_ram_ptr(&pfl->mem);
-    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &pfl->mem);
+
+    if (!pfl->ram_mode) {
+        sysbus_init_mmio(SYS_BUS_DEVICE(dev), &pfl->mem);
+    }
 
     if (pfl->blk) {
         uint64_t perm;
@@ -879,7 +887,9 @@ static void pflash_cfi01_system_reset(DeviceState *dev)
      */
     pfl->cmd = 0x00;
     pfl->wcycle = 0;
-    memory_region_rom_device_set_romd(&pfl->mem, true);
+    if (!pfl->ram_mode) {
+        memory_region_rom_device_set_romd(&pfl->mem, true);
+    }
     /*
      * The WSM ready timer occurs at most 150ns after system reset.
      * This model deliberately ignores this delay.
@@ -924,6 +934,7 @@ static Property pflash_cfi01_properties[] = {
     DEFINE_PROP_STRING("name", PFlashCFI01, name),
     DEFINE_PROP_BOOL("old-multiple-chip-handling", PFlashCFI01,
                      old_multiple_chip_handling, false),
+    DEFINE_PROP_BOOL("ram-mode", PFlashCFI01, ram_mode, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 

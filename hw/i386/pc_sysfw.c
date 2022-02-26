@@ -38,6 +38,7 @@
 #include "hw/block/flash.h"
 #include "sysemu/kvm.h"
 #include "sev.h"
+#include "kvm/tdx.h"
 
 #define FLASH_SECTOR_SIZE 4096
 
@@ -184,12 +185,19 @@ static void pc_system_flash_map(PCMachineState *pcms,
         total_size += size;
         qdev_prop_set_uint32(DEVICE(system_flash), "num-blocks",
                              size / FLASH_SECTOR_SIZE);
+        qdev_prop_set_bit(DEVICE(system_flash), "ram-mode", is_tdx_vm());
         sysbus_realize_and_unref(SYS_BUS_DEVICE(system_flash), &error_fatal);
-        sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0,
-                        0x100000000ULL - total_size);
+        flash_mem = pflash_cfi01_get_memory(system_flash);
+        if (is_tdx_vm()) {
+            memory_region_add_subregion(get_system_memory(),
+                                        0x100000000ULL - total_size,
+                                        flash_mem);
+        } else {
+            sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0,
+                            0x100000000ULL - total_size);
+        }
 
         if (i == 0) {
-            flash_mem = pflash_cfi01_get_memory(system_flash);
             pc_isa_bios_init(rom_memory, flash_mem, size);
 
             /* Encrypt the pflash boot ROM */
