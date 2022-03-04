@@ -164,12 +164,19 @@ static void tdvf_hob_add_memory_resources(TdvfHob *hob)
     for (i = 0; i < nr_e820_entries; i++) {
         e820_entry = &e820_entries[i];
 
-        if (le32_to_cpu(e820_entry->type) == E820_RAM) {
-            resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
+        switch (le32_to_cpu(e820_entry->type)) {
+        case E820_RAM:
+            resource_type = EFI_RESOURCE_MEMORY_UNACCEPTED;
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED;
-        } else {
+            break;
+        case E820_ACCEPTED:
+            resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
+            attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
+            break;
+        default:
             resource_type = EFI_RESOURCE_MEMORY_RESERVED;
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
+            break;
         }
 
         region = tdvf_get_area(hob, sizeof(*region));
@@ -188,6 +195,14 @@ static void tdvf_hob_add_memory_resources(TdvfHob *hob)
     }
 
     g_free(e820_entries);
+
+    /* E820_ACCEPTED is hack to track it. Make it e820 standard. */
+    for (i = 0; i < nr_e820_entries; i++) {
+        e820_entry = &e820_table[i];
+        if (e820_entry->type == cpu_to_le32(E820_ACCEPTED)) {
+            e820_entry->type = cpu_to_le32(EFI_RESOURCE_SYSTEM_MEMORY);
+        }
+    }
 }
 
 void tdvf_hob_create(TdxGuest *tdx, TdxFirmwareEntry *hob_entry)
