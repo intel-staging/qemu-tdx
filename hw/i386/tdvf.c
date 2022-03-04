@@ -59,7 +59,7 @@ static void tdvf_init_ram_memory(MachineState *ms, TdxFirmwareEntry *entry)
             exit(1);
         }
     }
-    e820_change_type(entry->address, entry->size, E820_RESERVED);
+    e820_change_type(entry->address, entry->size, E820_ACCEPTED);
 }
 
 static void tdvf_init_bios_memory(
@@ -103,7 +103,7 @@ static void tdvf_init_bios_memory(
     memory_region_add_subregion(system_memory, entry->address, entry->mr);
 
     if (entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
-        e820_add_entry(entry->address, entry->size, E820_RESERVED);
+        e820_add_entry(entry->address, entry->size, E820_ACCEPTED);
     }
 
     if (entry->data_len) {

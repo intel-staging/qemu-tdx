@@ -18,6 +18,12 @@
 
 #define E820_NR_ENTRIES 16
 
+/*
+ * Non-standard value. Used only for internal use and converted to E820_RESERVED
+ * before starting guest.
+ */
+#define E820_ACCEPTED   (-2)
+
 struct e820_entry {
     uint64_t address;
     uint64_t length;
