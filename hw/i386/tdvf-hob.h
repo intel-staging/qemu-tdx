@@ -9,7 +9,6 @@ void tdvf_hob_create(TdxGuest *tdx, TdxFirmwareEntry *hob_entry);
 #define EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE     \
     (EFI_RESOURCE_ATTRIBUTE_PRESENT |           \
      EFI_RESOURCE_ATTRIBUTE_INITIALIZED |       \
-     EFI_RESOURCE_ATTRIBUTE_ENCRYPTED |         \
      EFI_RESOURCE_ATTRIBUTE_TESTED)
 
 #define EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED  \
