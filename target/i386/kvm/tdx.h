@@ -33,6 +33,9 @@ typedef struct TdxFirmware {
     /* metadata */
     uint32_t nr_entries;
     TdxFirmwareEntry *entries;
+
+    /* For compatiblity */
+    bool guid_found;
 } TdxFirmware;
 
 #define for_each_fw_entry(fw, e)                                        \
