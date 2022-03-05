@@ -143,7 +143,7 @@ static int tdvf_e820_compare(const void *lhs_, const void* rhs_)
     return -1;
 }
 
-static void tdvf_hob_add_memory_resources(TdvfHob *hob)
+static void tdvf_hob_add_memory_resources(TdvfHob *hob, bool guid_found)
 {
     EFI_HOB_RESOURCE_DESCRIPTOR *region;
     EFI_RESOURCE_ATTRIBUTE_TYPE attr;
@@ -177,6 +177,20 @@ static void tdvf_hob_add_memory_resources(TdvfHob *hob)
             resource_type = EFI_RESOURCE_MEMORY_RESERVED;
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
             break;
+        }
+
+        /* REVERTME: workaround for the old version of TDVF expectations. */
+        if (!guid_found) {
+            switch (resource_type) {
+            case EFI_RESOURCE_MEMORY_UNACCEPTED:
+                resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
+                break;
+            case EFI_RESOURCE_SYSTEM_MEMORY:
+                resource_type = EFI_RESOURCE_MEMORY_RESERVED;
+                break;
+            default:
+                break;
+            }
         }
 
         region = tdvf_get_area(hob, sizeof(*region));
@@ -236,7 +250,7 @@ void tdvf_hob_create(TdxGuest *tdx, TdxFirmwareEntry *hob_entry)
         .EfiEndOfHobList = cpu_to_le64(0), /* initialized later */
     };
 
-    tdvf_hob_add_memory_resources(&hob);
+    tdvf_hob_add_memory_resources(&hob, tdx->fw.guid_found);
 
     tdvf_hob_add_mmio_resources(&hob);
 

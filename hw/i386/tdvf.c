@@ -251,6 +251,7 @@ static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset,
 {
     uint8_t *data;
 
+    fw->guid_found = false;
     if (!offset || (uint32_t)size != size) {
         return false;
     }
@@ -262,6 +263,7 @@ static bool tdvf_get_metadata_offset(int fd, int64_t size, uint32_t *offset,
     /* Locate TDVF metadata by TDX_METADATA_GUID structure */
     if (pc_system_ovmf_table_find(TDX_METADATA_GUID, &data, NULL)) {
         *offset = size - le32_to_cpu(((struct tdx_metadata_offset *)data)->offset);
+        fw->guid_found = true;
         return true;
     }
 
