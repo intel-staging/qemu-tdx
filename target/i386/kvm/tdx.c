@@ -1223,7 +1223,14 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         return;
     }
     if (buf_len == 0) {
-        return;
+        /*
+         * REVERTME: Accept old GHCI GetQuote with R13 buf_len = 0.
+         * buf size is 8KB. also hdr.out_len includes the header size.
+         */
+#define GHCI_GET_QUOTE_BUFSIZE_OLD      (8 * 1024)
+        warn_report("Guest attestation driver uses old GetQuote ABI.(R13 == 0) "
+                    "Please upgrade guest kernel.\n");
+        buf_len = GHCI_GET_QUOTE_BUFSIZE_OLD;
     }
 
     if (address_space_read(&address_space_memory, gpa, MEMTXATTRS_UNSPECIFIED,
@@ -1238,9 +1245,18 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
      * leak.  Enforce it.  The initial value of them doesn't matter for qemu to
      * process the request.
      */
-    if (le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS ||
-        le32_to_cpu(hdr.out_len) != 0) {
+    if (le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS
+        /* || le32_to_cpu(hdr.out_len) != 0 */) {
         return;
+    }
+    if (le32_to_cpu(hdr.out_len) > 0) {
+        /* REVERTME: old shared page format. */
+        warn_report("Guest attestation driver or R3AAL uses old GetQuote format."
+                    "(out_len > 0) Please upgrade driver or R3AAL library.\n");
+        if (le32_to_cpu(hdr.out_len) + sizeof(hdr) > buf_len) {
+            return;
+        }
+        hdr.out_len = cpu_to_le32(0);
     }
 
     /* Only safe-guard check to avoid too large buffer size. */
