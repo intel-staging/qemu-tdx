@@ -1035,7 +1035,9 @@ bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
 #define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
 
 #define TDG_VP_VMCALL_SUCCESS           0x0000000000000000ULL
+#define TDG_VP_VMCALL_RETRY             0x0000000000000001ULL
 #define TDG_VP_VMCALL_INVALID_OPERAND   0x8000000000000000ULL
+#define TDG_VP_VMCALL_ALIGN_ERROR       0x8000000000000002ULL
 
 #define TDX_GET_QUOTE_STRUCTURE_VERSION 1ULL
 
@@ -1283,6 +1285,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
 
     if (!QEMU_IS_ALIGNED(gpa, 4096)) {
+        vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
         return;
     }
 
@@ -1319,10 +1322,15 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     t->ioc = ioc;
 
     qemu_mutex_lock(&tdx->lock);
+    /*
+     * If Quote Generation Service(QGS) isn't unavailable, return RETRY in the
+     * expectation that the cloud admin will set later.
+     */
     if (!tdx->quote_generation ||
         /* Prevent too many in-flight get-quote request. */
         tdx->quote_generation_num >= TDX_MAX_GET_QUOTE_REQUEST) {
         qemu_mutex_unlock(&tdx->lock);
+        vmcall->status_code = TDG_VP_VMCALL_RETRY;
         object_unref(OBJECT(ioc));
         g_free(t);
         return;
