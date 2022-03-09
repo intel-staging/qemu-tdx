@@ -1130,6 +1130,53 @@ struct x86_msi {
     };
 };
 
+static void tdx_td_notify(struct tdx_get_quote_task *t)
+{
+    struct x86_msi x86_msi;
+    struct kvm_msi msi;
+    int ret;
+
+    /* It is optional for host VMM to interrupt TD. */
+    if(!(32 <= t->event_notify_interrupt && t->event_notify_interrupt <= 255))
+        return;
+
+    x86_msi = (struct x86_msi) {
+        .x86_address_lo  = {
+            .reserved_0 = 0,
+            .dest_mode_logical = 0,
+            .redirect_hint = 0,
+            .reserved_1 = 0,
+            .virt_destid_8_14 = 0,
+            .destid_0_7 = t->apic_id & 0xff,
+        },
+        .x86_address_hi = {
+            .reserved = 0,
+            .destid_8_31 = t->apic_id >> 8,
+        },
+        .x86_data = {
+            .vector = t->event_notify_interrupt,
+            .delivery_mode = APIC_DM_FIXED,
+            .dest_mode_logical = 0,
+            .reserved = 0,
+            .active_low = 0,
+            .is_level = 0,
+        },
+    };
+    msi = (struct kvm_msi) {
+        .address_lo = x86_msi.address_lo,
+        .address_hi = x86_msi.address_hi,
+        .data = x86_msi.data,
+        .flags = 0,
+        .devid = 0,
+    };
+    ret = kvm_vm_ioctl(kvm_state, KVM_SIGNAL_MSI, &msi);
+    if (ret < 0) {
+        /* In this case, no better way to tell it to guest.  Log it. */
+        error_report("TDX: injection %d failed, interrupt lost (%s).\n",
+                     t->event_notify_interrupt, strerror(-ret));
+    }
+}
+
 /*
  * TODO: If QGS doesn't reply for long time, make it an error and interrupt
  * guest.
@@ -1142,15 +1189,10 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     char *out_data = NULL;
     size_t out_len;
     ssize_t size;
-    int ret;
-    struct x86_msi x86_msi;
-    struct kvm_msi msi;
     MachineState *ms;
     TdxGuest *tdx;
 
-    assert(32 <= t->event_notify_interrupt && t->event_notify_interrupt <= 255);
     t->hdr.error_code = cpu_to_le64(TDX_GET_QUOTE_STATUS_ERROR);
-
     if (qio_task_propagate_error(task, NULL)) {
         goto error;
     }
@@ -1212,42 +1254,7 @@ error:
             MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
         error_report("TDX: failed to updsate GetQuote header.\n");
     }
-
-    x86_msi = (struct x86_msi) {
-        .x86_address_lo  = {
-            .reserved_0 = 0,
-            .dest_mode_logical = 0,
-            .redirect_hint = 0,
-            .reserved_1 = 0,
-            .virt_destid_8_14 = 0,
-            .destid_0_7 = t->apic_id & 0xff,
-        },
-        .x86_address_hi = {
-            .reserved = 0,
-            .destid_8_31 = t->apic_id >> 8,
-        },
-        .x86_data = {
-            .vector = t->event_notify_interrupt,
-            .delivery_mode = APIC_DM_FIXED,
-            .dest_mode_logical = 0,
-            .reserved = 0,
-            .active_low = 0,
-            .is_level = 0,
-        },
-    };
-    msi = (struct kvm_msi) {
-        .address_lo = x86_msi.address_lo,
-        .address_hi = x86_msi.address_hi,
-        .data = x86_msi.data,
-        .flags = 0,
-        .devid = 0,
-    };
-    ret = kvm_vm_ioctl(kvm_state, KVM_SIGNAL_MSI, &msi);
-    if (ret < 0) {
-        /* In this case, no better way to tell it to guest.  Log it. */
-        error_report("TDX: injection %d failed, interrupt lost (%s).\n",
-                     t->event_notify_interrupt, strerror(-ret));
-    }
+    tdx_td_notify(t);
 
     qio_channel_close(QIO_CHANNEL(t->ioc), &err);
     object_unref(OBJECT(t->ioc));
@@ -1312,8 +1319,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     t->ioc = ioc;
 
     qemu_mutex_lock(&tdx->lock);
-    if (tdx->event_notify_interrupt < 32 || 255 < tdx->event_notify_interrupt ||
-        !tdx->quote_generation ||
+    if (!tdx->quote_generation ||
         /* Prevent too many in-flight get-quote request. */
         tdx->quote_generation_num >= TDX_MAX_GET_QUOTE_REQUEST) {
         qemu_mutex_unlock(&tdx->lock);
