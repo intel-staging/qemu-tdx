@@ -1,9 +1,14 @@
 #ifndef QEMU_I386_TDX_H
 #define QEMU_I386_TDX_H
 
+#include "linux/kvm.h"
+
+#ifndef CONFIG_USER_ONLY
+
 #include "qom/object.h"
 #include "qapi/error.h"
 #include "exec/confidential-guest-support.h"
+#include "qapi/qapi-types-sockets.h"
 
 typedef struct TdxFirmwareEntry {
     uint32_t data_offset;
@@ -68,6 +73,8 @@ typedef struct TdxGuest {
 } TdxGuest;
 
 int tdx_kvm_init(ConfidentialGuestSupport *cgs, KVMState *s, Error **errp);
+#endif
+
 uint32_t tdx_get_cpuid_config(uint32_t function, uint32_t index, int reg);
 void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
 

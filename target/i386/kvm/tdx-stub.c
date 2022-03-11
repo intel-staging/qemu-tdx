@@ -1,6 +1,14 @@
+#include <linux/kvm.h>
+
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "sysemu/tdx.h"
+#include "qapi/error.h"
+#include "qapi/qapi-commands-misc-target.h"
+#include "qapi/qapi-types-misc-target.h"
+
+#include "cpu.h"
+#include "tdx.h"
 
 #ifndef CONFIG_USER_ONLY
 int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
@@ -8,6 +16,11 @@ int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory)
     return -ENOSYS;
 }
 #endif
+
+bool kvm_tdx_enabled(void)
+{
+    return false;
+}
 
 void tdx_pre_create_vcpu(CPUState *cpu)
 {
@@ -33,11 +46,6 @@ void tdx_check_plus_minus_features(CPUState *cpu)
 uint32_t tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg)
 {
     return 0;
-}
-
-struct TDXCapability *tdx_get_capabilities(void)
-{
-    return NULL;
 }
 
 bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)

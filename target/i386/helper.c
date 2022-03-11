@@ -19,13 +19,13 @@
 
 #include "qemu/osdep.h"
 #include "qapi/qapi-events-run-state.h"
-#include "hw/boards.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "sysemu/runstate.h"
 #include "kvm/kvm_i386.h"
 #include "kvm/tdx.h"
 #ifndef CONFIG_USER_ONLY
+#include "hw/boards.h"
 #include "sysemu/hw_accel.h"
 #include "monitor/monitor.h"
 #endif
