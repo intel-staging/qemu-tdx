@@ -13,9 +13,9 @@
 #include "sysemu/kvm.h"
 #include "hw/i386/pc.h"
 
-bool kvm_tdx_enabled(void);
 int tdx_system_firmware_init(PCMachineState *pcms, MemoryRegion *rom_memory);
 #endif
+bool kvm_tdx_enabled(void);
 
 void tdx_pre_create_vcpu(CPUState *cpu);
 void tdx_post_init_vcpu(CPUState *cpu);
