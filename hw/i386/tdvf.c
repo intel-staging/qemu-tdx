@@ -68,6 +68,10 @@ static TdvfMetadata *tdvf_get_metadata(TdxFirmware *fw, void *flash_ptr, int siz
         }
     } else {
         error_report("Cannot find TDX_METADATA_OFFSET_GUID");
+        warn_report("==============================================================");
+        warn_report("!!!    Warning: Please upgrade to upstream version TDVF    !!!");
+        warn_report("!!!             Old version will be deprecated soon        !!!");
+        warn_report("==============================================================");
         fw->guid_found = false;
 
 #define TDVF_METDATA_OFFSET_FROM_END 0x20
