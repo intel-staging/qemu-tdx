@@ -1176,7 +1176,8 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
     }
     g_free(filename);
 
-    if (x86ms->vm_type != KVM_X86_SW_PROTECTED_VM) {
+    /* For TDX, alias different GPAs to same private memory is not supported */
+    if (x86ms->vm_type != KVM_X86_SW_PROTECTED_VM && !is_tdx_vm()) {
         /* map the last 128KB of the BIOS in ISA space */
         isa_bios_size = MIN(bios_size, 128 * KiB);
         isa_bios = g_malloc(sizeof(*isa_bios));
