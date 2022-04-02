@@ -87,6 +87,20 @@ static void tdvf_hob_add_memory_resources(TdxGuest *tdx, TdvfHob *hob)
             exit(1);
         }
 
+        /* REVERTME: workaround for the old version of TDVF expectations. */
+        if (!tdx->tdvf.guid_found) {
+            switch (e->type) {
+            case TDX_RAM_UNACCEPTED:
+                resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
+                break;
+            case TDX_RAM_ADDED:
+                resource_type = EFI_RESOURCE_MEMORY_RESERVED;
+                break;
+            default:
+                break;
+            }
+        }
+
         region = tdvf_get_area(hob, sizeof(*region));
         *region = (EFI_HOB_RESOURCE_DESCRIPTOR) {
             .Header = {
