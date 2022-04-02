@@ -49,7 +49,7 @@ struct tdx_metadata_offset {
     uint32_t offset;
 };
 
-static TdvfMetadata *tdvf_get_metadata(void *flash_ptr, int size)
+static TdvfMetadata *tdvf_get_metadata(TdxFirmware *fw, void *flash_ptr, int size)
 {
     TdvfMetadata *metadata;
     uint32_t offset = 0;
@@ -60,14 +60,24 @@ static TdvfMetadata *tdvf_get_metadata(void *flash_ptr, int size)
     }
 
     if (pc_system_ovmf_table_find(TDX_METADATA_OFFSET_GUID, &data, NULL)) {
-        offset = size - le32_to_cpu(((struct tdx_metadata_offset *)data)->offset);
+        fw->guid_found = true;
 
+        offset = size - le32_to_cpu(((struct tdx_metadata_offset *)data)->offset);
         if (offset + sizeof(*metadata) > size) {
             return NULL;
         }
     } else {
         error_report("Cannot find TDX_METADATA_OFFSET_GUID");
-        return NULL;
+        fw->guid_found = false;
+
+#define TDVF_METDATA_OFFSET_FROM_END 0x20
+        offset = size - TDVF_METDATA_OFFSET_FROM_END;
+        uint32_t *metadata_offset = (uint32_t *)(flash_ptr + offset);
+        offset = le32_to_cpu(*metadata_offset);
+
+        if (offset + sizeof(*metadata) > size) {
+            return NULL;
+        }
     }
 
     metadata = flash_ptr + offset;
@@ -152,7 +162,7 @@ int tdvf_parse_metadata(TdxFirmware *fw, void *flash_ptr, int size)
     ssize_t entries_size;
     uint32_t len, i;
 
-    metadata = tdvf_get_metadata(flash_ptr, size);
+    metadata = tdvf_get_metadata(fw, flash_ptr, size);
     if (!metadata) {
         return -EINVAL;
     }
