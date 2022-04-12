@@ -1008,11 +1008,7 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     }
 
     if (size > 0) {
-        /*
-         * TODO: For private kvm memslot, covert it.  Otherwise nop.
-         * ret = kvm_convert_memory(gpa, size, private);
-         */
-        (void)private;
+        ret = kvm_convert_memory(gpa, size, private);
     }
     if (!ret) {
         vmcall->status_code = TDG_VP_VMCALL_SUCCESS;

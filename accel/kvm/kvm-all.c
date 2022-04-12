@@ -2894,7 +2894,7 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
-static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
+int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
 {
     MemoryRegionSection section;
     void *addr;
@@ -2907,17 +2907,20 @@ static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
         return -1;
     }
 
-    if (object_dynamic_cast(section.mr->owner,
-                            TYPE_MEMORY_BACKEND_MEMFD_PRIVATE)) {
-        addr = memory_region_get_ram_ptr(section.mr) +
-            section.offset_within_region;
-        rb = qemu_ram_block_from_host(addr, false, &offset);
-        ret = ram_block_convert_range(rb, offset, size, shared_to_private);
-    } else {
-        warn_report("Unkonwn start 0x%"HWADDR_PRIx" size 0x%"HWADDR_PRIx" shared_to_private %d",
-                    start, size, shared_to_private);
+    if (!object_dynamic_cast(section.mr->owner,
+                             TYPE_MEMORY_BACKEND_MEMFD_PRIVATE)) {
+        /*
+         * just nop: Non-private memfd case, KVM kernel takes care of the
+         * conversion. qemu has to do nothing for now.
+         */
+        memory_region_unref(section.mr);
+        return 0;
     }
 
+    addr = memory_region_get_ram_ptr(section.mr) +
+        section.offset_within_region;
+    rb = qemu_ram_block_from_host(addr, false, &offset);
+    ret = ram_block_convert_range(rb, offset, size, shared_to_private);
     memory_region_unref(section.mr);
     return ret;
 }
