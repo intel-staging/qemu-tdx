@@ -2866,7 +2866,7 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
-static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
+int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
 {
     MemoryRegionSection section;
     void *addr;

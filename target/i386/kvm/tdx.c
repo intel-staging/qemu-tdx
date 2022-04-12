@@ -1031,6 +1031,7 @@ bool tdx_debug_enabled(ConfidentialGuestSupport *cgs)
     return tdx->debug;
 }
 
+#define TDG_VP_VMCALL_MAP_GPA                           0x10001ULL
 #define TDG_VP_VMCALL_GET_QUOTE                         0x10002ULL
 #define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
 
@@ -1083,6 +1084,48 @@ struct tdx_get_quote_header {
      * Qemu overwrites this buffer with a message returned from QGS.
      */
 };
+
+static hwaddr tdx_shared_bit(X86CPU *cpu)
+{
+    return (cpu->phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
+}
+
+static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    hwaddr addr_mask = (1ULL << cpu->phys_bits) - 1;
+    hwaddr shared_bit = tdx_shared_bit(cpu);
+    hwaddr gpa = vmcall->in_r12 & ~shared_bit;
+    bool private = !(vmcall->in_r12 & shared_bit);
+    hwaddr size = vmcall->in_r13;
+    int ret = 0;
+
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    if (gpa & ~addr_mask) {
+        return;
+    }
+    if (!QEMU_IS_ALIGNED(gpa, 4096) || !QEMU_IS_ALIGNED(size, 4096)) {
+        vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
+        return;
+    }
+
+    if (size > 0) {
+        static bool checked;
+        static bool is_private_memfd;
+
+        if (!checked) {
+            MachineState *ms = MACHINE(qdev_get_machine());
+            is_private_memfd = !!object_dynamic_cast(ms->ram->owner, TYPE_MEMORY_BACKEND_MEMFD_PRIVATE);
+            checked = true;
+        }
+        if (is_private_memfd) {
+            ret = kvm_convert_memory(gpa, size, private);
+        }
+    }
+    if (!ret) {
+        vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    }
+}
 
 struct tdx_get_quote_task {
     uint32_t apic_id;
@@ -1415,6 +1458,9 @@ static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     }
 
     switch (vmcall->subfunction) {
+    case TDG_VP_VMCALL_MAP_GPA:
+        tdx_handle_map_gpa(cpu, vmcall);
+        break;
     case TDG_VP_VMCALL_GET_QUOTE:
         tdx_handle_get_quote(cpu, vmcall);
         break;
