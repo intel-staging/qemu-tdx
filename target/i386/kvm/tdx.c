@@ -1271,7 +1271,7 @@ error:
 
 static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
-    hwaddr gpa = vmcall->in_r12;
+    hwaddr gpa = vmcall->in_r12 & ((1ULL << cpu->phys_bits) - 1);
     uint64_t buf_len = vmcall->in_r13;
     struct tdx_get_quote_header hdr;
     MachineState *ms;
@@ -1280,6 +1280,24 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     struct tdx_get_quote_task *t;
 
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    /*
+     * TODO: Once potentially used guest kernels are updated, add error check if
+     * gpa is shared.  For now accept private GPA and treat it as shared GPA for
+     * old TD kernel.
+     */
+#if 0
+    /* GPA needs to be shared GPA. */
+    if (cpu->phys_bits > 48) {
+        if (!(vmcall->in_r12 & BIT_ULL(51))) {
+            return;
+        }
+    } else {
+        if (!(vmcall->in_r12 & BIT_ULL(47))) {
+            return;
+        }
+    }
+#endif
 
     if (!QEMU_IS_ALIGNED(gpa, 4096) || !QEMU_IS_ALIGNED(buf_len, 4096)) {
         vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
