@@ -368,9 +368,12 @@ static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, boo
     mem.region.guest_phys_addr = slot->start_addr;
     mem.region.userspace_addr = (unsigned long)slot->ram;
     mem.region.flags = slot->flags;
-    if (slot->flags | KVM_MEM_PRIVATE) {
+    if (slot->flags & KVM_MEM_PRIVATE) {
         mem.private_fd = slot->fd;
         mem.private_offset = slot->ofs;
+    } else {
+        mem.private_fd = -1;
+        mem.private_offset = -1;
     }
 
     if (slot->memory_size && !new &&
@@ -1451,9 +1454,12 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         mem->ram_start_offset = ram_start_offset;
         mem->ram = ram;
         mem->flags = kvm_mem_flags(mr);
-        if (mem->flags | KVM_MEM_PRIVATE) {
+        if (mem->flags & KVM_MEM_PRIVATE) {
             mem->fd = mr->ram_block->private_fd;
-	    mem->ofs = (uint8_t*)ram - mr->ram_block->host;
+            mem->ofs = (uint8_t*)ram - mr->ram_block->host;
+        } else {
+            mem->fd = -1;
+            mem->ofs = -1;
         }
         kvm_slot_init_dirty_bitmap(mem);
         err = kvm_set_user_memory_region(kml, mem, true);
