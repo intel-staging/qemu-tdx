@@ -39,6 +39,13 @@ OBJECT_DECLARE_TYPE(HostMemoryBackend, HostMemoryBackendClass,
 #define TYPE_MEMORY_BACKEND_FILE "memory-backend-file"
 
 
+/* hostmem-memfd-private.c */
+/**
+ * @TYPE_MEMORY_BACKEND_MEMFD_PRIVATE
+ * name of backend that uses private memfd
+ */
+#define TYPE_MEMORY_BACKEND_MEMFD_PRIVATE "memory-backend-memfd-private"
+
 /**
  * HostMemoryBackendClass:
  * @parent_class: opaque parent class container

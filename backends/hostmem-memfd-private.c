@@ -18,8 +18,6 @@
 #include "qapi/error.h"
 #include "qom/object.h"
 
-#define TYPE_MEMORY_BACKEND_MEMFD_PRIVATE "memory-backend-memfd-private"
-
 OBJECT_DECLARE_SIMPLE_TYPE(HostMemoryBackendPrivateMemfd,
                            MEMORY_BACKEND_MEMFD_PRIVATE)
 
