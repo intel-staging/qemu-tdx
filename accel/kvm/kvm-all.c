@@ -2872,18 +2872,26 @@ static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     void *addr;
     RAMBlock *rb;
     ram_addr_t offset;
-    int ret;
+    int ret = -1;
 
     section = memory_region_find(get_system_memory(), start, size);
-    if (section.mr) {
+    if (!section.mr) {
+        return -1;
+    }
+
+    if (object_dynamic_cast(section.mr->owner,
+                            TYPE_MEMORY_BACKEND_MEMFD_PRIVATE)) {
         addr = memory_region_get_ram_ptr(section.mr) +
-               section.offset_within_region;
+            section.offset_within_region;
         rb = qemu_ram_block_from_host(addr, false, &offset);
         ret = ram_block_convert_range(rb, offset, size, shared_to_private);
-        memory_region_unref(section.mr);
-        return ret;
+    } else {
+        warn_report("Unkonwn start 0x%"HWADDR_PRIx" size 0x%"HWADDR_PRIx" shared_to_private %d",
+                    start, size, shared_to_private);
     }
-    return -1;
+
+    memory_region_unref(section.mr);
+    return ret;
 }
 
 int kvm_cpu_exec(CPUState *cpu)
