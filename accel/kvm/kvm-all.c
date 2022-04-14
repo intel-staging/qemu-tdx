@@ -391,9 +391,13 @@ err:
                               mem.region.userspace_addr, ret);
     if (ret < 0) {
         error_report("%s: KVM_SET_USER_MEMORY_REGION failed, slot=%d,"
-                     " start=0x%" PRIx64 ", size=0x%" PRIx64 ": %s",
+                     " start=0x%" PRIx64 ", size=0x%" PRIx64 ","
+                     " flags=0x%" PRIx32 ","
+                     " private_fd=%" PRId32 ", private_offset=0x%" PRIx64 ": %s",
                      __func__, mem.region.slot, slot->start_addr,
-                     (uint64_t)mem.region.memory_size, strerror(errno));
+                     (uint64_t)mem.region.memory_size, mem.region.flags,
+                     mem.private_fd, (uint64_t)mem.private_offset,
+                     strerror(errno));
     }
     return ret;
 }
