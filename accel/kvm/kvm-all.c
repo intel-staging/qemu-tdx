@@ -375,6 +375,16 @@ static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, boo
         mem.private_fd = -1;
         mem.private_offset = -1;
     }
+    if (kvm_tdx_enabled() && !(slot->flags & KVM_MEM_PRIVATE)) {
+        warn_report("%s: Non-private memory backend is used for TDX"
+                    " slot %d,"
+                    " start_addr 0x%" PRIx64 ","
+                    " ram 0x%" PRIx64 ","
+                    " size 0x%" PRIx64 ","
+                    " flags 0x%x",
+                    __func__, mem.region.slot, slot->start_addr,
+                    (uint64_t)slot->ram, slot->memory_size, slot->flags);
+    }
 
     if (slot->memory_size && !new &&
         (slot->flags ^ slot->old_flags) & KVM_MEM_READONLY) {
