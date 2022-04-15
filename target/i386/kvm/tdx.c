@@ -1110,17 +1110,7 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     }
 
     if (size > 0) {
-        static bool checked;
-        static bool is_private_memfd;
-
-        if (!checked) {
-            MachineState *ms = MACHINE(qdev_get_machine());
-            is_private_memfd = !!object_dynamic_cast(ms->ram->owner, TYPE_MEMORY_BACKEND_MEMFD_PRIVATE);
-            checked = true;
-        }
-        if (is_private_memfd) {
-            ret = kvm_convert_memory(gpa, size, private);
-        }
+        ret = kvm_convert_memory(gpa, size, private);
     }
     if (!ret) {
         vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
