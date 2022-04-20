@@ -1244,9 +1244,21 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     out_data = g_malloc(t->buf_len);
     out_len = 0;
     size = 0;
-    while (out_len < t->buf_len) {
-        size = qio_channel_read(
-            QIO_CHANNEL(t->ioc), out_data + out_len, t->buf_len - out_len, &err);
+    while (true) {
+        char *buf;
+        size_t buf_size;
+        char tmp;
+
+        if (out_len < t->buf_len) {
+            buf = out_data + out_len;
+            buf_size = t->buf_len - out_len;
+        } else {
+            /* To check if the recieved data is bigger than buf_len */
+            buf = &tmp;
+            buf_size = 1;
+        }
+
+        size = qio_channel_read(QIO_CHANNEL(t->ioc), buf, buf_size, &err);
         if (err) {
             break;
         }
@@ -1254,6 +1266,8 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
             break;
         }
         out_len += size;
+        if (out_len > t->buf_len)
+            break;
     }
     /*
      * Treat partial read as success and let the QGS client to handle it because
@@ -1261,6 +1275,11 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
      */
     if (out_len == 0 && (err || size < 0)) {
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
+        goto error;
+    }
+    if (out_len > 0 && out_len > t->buf_len) {
+        /* The received data is larger than prepared buffer size. */
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
         goto error;
     }
 
