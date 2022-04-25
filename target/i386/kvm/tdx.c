@@ -181,10 +181,16 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     tdx_cmd.error = 0;
     tdx_cmd.unused = 0;
 
-    if (ioctl_no == KVM_TDX_INIT_VCPU) {
+    switch (ioctl_no) {
+    case KVM_TDX_CAPABILITIES:
+        r = kvm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        break;
+    case KVM_TDX_INIT_VCPU:
         r = kvm_vcpu_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
-    } else {
+        break;
+    default:
         r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        break;
     }
 
     /*
@@ -193,7 +199,7 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
      * work with old ABI.
      */
     if (r && r != -E2BIG && ioctl_no == KVM_TDX_CAPABILITIES) {
-        r = kvm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        r = kvm_vm_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
     }
     if (ioctl_no == KVM_TDX_CAPABILITIES && r == -E2BIG)
         return r;
