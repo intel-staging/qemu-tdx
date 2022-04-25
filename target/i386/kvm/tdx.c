@@ -168,7 +168,7 @@ TDXCapability *tdx_get_capabilities(void)
 }
 
 static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
-                        __u32 metadata, void *data)
+                        __u32 flags, void *data)
 {
     struct kvm_tdx_cmd tdx_cmd;
     int r;
@@ -176,8 +176,10 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     memset(&tdx_cmd, 0x0, sizeof(tdx_cmd));
 
     tdx_cmd.id = ioctl_no;
-    tdx_cmd.metadata = metadata;
+    tdx_cmd.flags = flags;
     tdx_cmd.data = (__u64)(unsigned long)data;
+    tdx_cmd.error = 0;
+    tdx_cmd.unused = 0;
 
     if (ioctl_no == KVM_TDX_INIT_VCPU) {
         r = kvm_vcpu_ioctl(state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
@@ -202,10 +204,10 @@ static int __tdx_ioctl(void *state, int ioctl_no, const char *ioctl_name,
     }
     return 0;
 }
-#define _tdx_ioctl(cpu, ioctl_no, metadata, data) \
-        __tdx_ioctl(cpu, ioctl_no, stringify(ioctl_no), metadata, data)
-#define tdx_ioctl(ioctl_no, metadata, data) \
-        _tdx_ioctl(kvm_state, ioctl_no, metadata, data)
+#define _tdx_ioctl(cpu, ioctl_no, flags, data) \
+        __tdx_ioctl(cpu, ioctl_no, stringify(ioctl_no), flags, data)
+#define tdx_ioctl(ioctl_no, flags, data) \
+        _tdx_ioctl(kvm_state, ioctl_no, flags, data)
 
 static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
 {
@@ -216,7 +218,7 @@ static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
             return entry;
         }
     }
-    error_report("TDVF metadata doesn't specify TD_HOB location.");
+    error_report("TDVF flags doesn't specify TD_HOB location.");
     exit(1);
 }
 
@@ -252,10 +254,10 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
             .nr_pages = entry->size / 4096,
         };
 
-        __u32 metadata = entry->attributes & TDVF_SECTION_ATTRIBUTES_EXTENDMR ?
+        __u32 flags = entry->attributes & TDVF_SECTION_ATTRIBUTES_EXTENDMR ?
                          KVM_TDX_MEASURE_MEMORY_REGION : 0;
 
-        tdx_ioctl(KVM_TDX_INIT_MEM_REGION, metadata, &mem_region);
+        tdx_ioctl(KVM_TDX_INIT_MEM_REGION, flags, &mem_region);
 
         qemu_ram_munmap(-1, entry->mem_ptr, entry->size);
         entry->mem_ptr = NULL;

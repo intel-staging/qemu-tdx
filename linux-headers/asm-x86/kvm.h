@@ -541,8 +541,10 @@ enum kvm_tdx_cmd_id {
 
 struct kvm_tdx_cmd {
 	__u32 id;
-	__u32 metadata;
+	__u32 flags;
 	__u64 data;
+	__u64 error;
+	__u64 unused;
 };
 
 struct kvm_tdx_cpuid_config {
