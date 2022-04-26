@@ -568,14 +568,35 @@ struct kvm_tdx_capabilities {
 };
 
 struct kvm_tdx_init_vm {
+	__u64 attributes;
 	__u32 max_vcpus;
 	__u32 tsc_khz;
-	__u64 attributes;
-	__u64 cpuid;
-	__u64 mrconfigid[6];    /* sha384 digest */
-	__u64 mrowner[6];       /* sha384 digest */
-	__u64 mrownerconfig[6]; /* sha348 digest */
-	__u64 reserved[43];     /* must be zero for future extensibility */
+	__u64 mrconfigid[6];	/* sha384 digest */
+	__u64 mrowner[6];	/* sha384 digest */
+	__u64 mrownerconfig[6];	/* sha348 digest */
+	union {
+		/*
+		 * kvm_tdx_capabilities.nr_cpuid_configs array.
+		 * KVM_TDX_INIT_VM is called before vcpu creation, thus before
+		 * KVM_SET_CPUID2.  CPUID configurations needs to be passed.
+		 *
+		 * This configuration supersedes KVM_SET_CPUID{,2}.
+		 * The user space VMM, e.g. qemu, should make them consistent
+		 * with this values.
+		 * KVM_MAX_CPUID_ENTRIES = 256. Use immediate to avoid header
+		 * inclusion hell.
+		 */
+		struct {
+			struct kvm_cpuid2 cpuid;
+			struct kvm_cpuid_entry2 entries[256];	/* 8KB */
+		};
+		/*
+		 * For future extensibility.
+		 * The size(struct kvm_tdx_init_vm) = 16KB.
+		 * This should be enough given sizeof(TD_PARAMS) = 1024
+		 */
+		__u64 reserved[2027];
+	};
 };
 
 #define KVM_TDX_MEASURE_MEMORY_REGION	(1UL << 0)

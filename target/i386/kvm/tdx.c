@@ -831,29 +831,17 @@ void tdx_check_plus_minus_features(CPUState *cpu)
 
 void tdx_pre_create_vcpu(CPUState *cpu)
 {
-    struct {
-        struct kvm_cpuid2 cpuid;
-        struct kvm_cpuid_entry2 entries[KVM_MAX_CPUID_ENTRIES];
-    } cpuid_data;
-
-    /*
-     * The kernel defines these structs with padding fields so there
-     * should be no extra padding in our cpuid_data struct.
-     */
-    QEMU_BUILD_BUG_ON(sizeof(cpuid_data) !=
-                      sizeof(struct kvm_cpuid2) +
-                      sizeof(struct kvm_cpuid_entry2) * KVM_MAX_CPUID_ENTRIES);
-
     MachineState *ms = MACHINE(qdev_get_machine());
     X86CPU *x86cpu = X86_CPU(cpu);
     CPUX86State *env = &x86cpu->env;
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
-    struct kvm_tdx_init_vm init_vm;
+    struct kvm_tdx_init_vm *init_vm;
 
     if (!tdx) {
         return;
     }
+    init_vm = g_malloc0(sizeof(*init_vm));
 
     /* TODO: Use tdx_caps to validate the config. */
     if (!(env->features[FEAT_1_ECX] & CPUID_EXT_XSAVE)) {
@@ -880,36 +868,34 @@ void tdx_pre_create_vcpu(CPUState *cpu)
     }
     tdx->initialized = true;
 
-    memset(&cpuid_data, 0, sizeof(cpuid_data));
-
-    cpuid_data.cpuid.nent = kvm_x86_arch_cpuid(env, cpuid_data.entries, 0);
-    cpuid_data.cpuid.padding = 0;
-
-    init_vm.max_vcpus = ms->smp.cpus;
-    init_vm.tsc_khz = env->tsc_khz;
-    init_vm.attributes = 0;
-    init_vm.attributes |= tdx->debug ? TDX1_TD_ATTRIBUTE_DEBUG : 0;
-    init_vm.attributes |= tdx->sept_ve_disable ? TDX1_TD_ATTRIBUTE_SEPT_VE_DISABLE : 0;
-    init_vm.attributes |= (env->features[FEAT_7_0_ECX] & CPUID_7_0_ECX_PKS) ?
+    init_vm->max_vcpus = ms->smp.cpus;
+    init_vm->tsc_khz = env->tsc_khz;
+    init_vm->attributes = 0;
+    init_vm->attributes |= tdx->debug ? TDX1_TD_ATTRIBUTE_DEBUG : 0;
+    init_vm->attributes |= tdx->sept_ve_disable ? TDX1_TD_ATTRIBUTE_SEPT_VE_DISABLE : 0;
+    init_vm->attributes |= (env->features[FEAT_7_0_ECX] & CPUID_7_0_ECX_PKS) ?
         TDX1_TD_ATTRIBUTE_PKS : 0;
-    init_vm.attributes |= x86cpu->enable_pmu ? TDX1_TD_ATTRIBUTE_PERFMON : 0;
+    init_vm->attributes |= x86cpu->enable_pmu ? TDX1_TD_ATTRIBUTE_PERFMON : 0;
 
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrconfigid) != sizeof(tdx->mrconfigid));
-    memcpy(init_vm.mrconfigid, tdx->mrconfigid, sizeof(init_vm.mrconfigid));
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrowner) != sizeof(tdx->mrowner));
-    memcpy(init_vm.mrowner, tdx->mrowner, sizeof(init_vm.mrowner));
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrownerconfig) !=
+    QEMU_BUILD_BUG_ON(sizeof(init_vm->mrconfigid) != sizeof(tdx->mrconfigid));
+    memcpy(init_vm->mrconfigid, tdx->mrconfigid, sizeof(init_vm->mrconfigid));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm->mrowner) != sizeof(tdx->mrowner));
+    memcpy(init_vm->mrowner, tdx->mrowner, sizeof(init_vm->mrowner));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm->mrownerconfig) !=
                       sizeof(tdx->mrownerconfig));
-    memcpy(init_vm.mrownerconfig, tdx->mrownerconfig,
-           sizeof(init_vm.mrownerconfig));
+    memcpy(init_vm->mrownerconfig, tdx->mrownerconfig,
+           sizeof(init_vm->mrownerconfig));
+    memset(init_vm->reserved, 0, sizeof(init_vm->reserved));
 
-    memset(init_vm.reserved, 0, sizeof(init_vm.reserved));
+    QEMU_BUILD_BUG_ON(ARRAY_SIZE(init_vm->entries) < KVM_MAX_CPUID_ENTRIES);
+    init_vm->cpuid.nent = kvm_x86_arch_cpuid(env, init_vm->entries, 0);
+    init_vm->cpuid.padding = 0;
 
-    init_vm.cpuid = (__u64)(&cpuid_data);
-    tdx_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
+    tdx_ioctl(KVM_TDX_INIT_VM, 0, init_vm);
 
 out:
     qemu_mutex_unlock(&tdx->lock);
+    g_free(init_vm);
 }
 
 void tdx_post_init_vcpu(CPUState *cpu)
