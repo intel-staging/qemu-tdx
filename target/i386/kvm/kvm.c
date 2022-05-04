@@ -2496,7 +2496,7 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
      * that case we need to stick with the default, i.e. a 256K maximum BIOS
      * size.
      */
-    if (kvm_check_extension(s, KVM_CAP_SET_IDENTITY_MAP_ADDR)) {
+    if (kvm_vm_check_extension(s, KVM_CAP_SET_IDENTITY_MAP_ADDR)) {
         /* Allows up to 16M BIOSes. */
         identity_base = 0xfeffc000;
 
