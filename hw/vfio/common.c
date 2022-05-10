@@ -2626,3 +2626,79 @@ int vfio_eeh_as_op(AddressSpace *as, uint32_t op)
     }
     return vfio_eeh_container_op(container, op);
 }
+
+int vfio_do_dma_map_range(hwaddr iova, ram_addr_t size,
+                        void *vaddr, bool readonly)
+{
+    VFIOAddressSpace *space;
+    VFIOContainer *container;
+
+    int ret = 0;
+
+    struct vfio_iommu_type1_dma_map map = {
+        .argsz = sizeof(map),
+        .flags = VFIO_DMA_MAP_FLAG_READ,
+        .vaddr = (__u64)(uintptr_t)vaddr,
+        .iova = iova,
+        .size = size,
+    };
+
+    if (QLIST_EMPTY(&vfio_address_spaces)) {
+        return 0;
+    }
+
+    if (!readonly) {
+        map.flags |= VFIO_DMA_MAP_FLAG_WRITE;
+    }
+
+    QLIST_FOREACH(space, &vfio_address_spaces, list) {
+        if (space->as != &address_space_memory)
+            continue;
+        QLIST_FOREACH(container, &space->containers, next) {
+            ret = ioctl(container->fd, VFIO_IOMMU_MAP_DMA, &map);
+            if (ret) {
+                error_report("VFIO_MAP_DMA (%p, 0x%"HWADDR_PRIx", "
+                             "0x%"HWADDR_PRIx", %p) = %d (%m)",
+                             container, iova, size, vaddr, ret);
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+int vfio_do_dma_unmap_range(hwaddr iova, ram_addr_t size)
+{
+    VFIOAddressSpace *space;
+    VFIOContainer *container;
+
+    int ret = 0;
+
+    struct vfio_iommu_type1_dma_unmap unmap = {
+        .argsz = sizeof(unmap),
+        .flags = 0,
+        .iova = iova,
+        .size = size,
+    };
+
+    if (QLIST_EMPTY(&vfio_address_spaces)) {
+        return 0;
+    }
+
+    QLIST_FOREACH(space, &vfio_address_spaces, list) {
+        if (space->as != &address_space_memory)
+            continue;
+        QLIST_FOREACH(container, &space->containers, next) {
+            ret = ioctl(container->fd, VFIO_IOMMU_UNMAP_DMA, &unmap);
+            if (ret) {
+                error_report("VFIO_UNMAP_DMA (%p, 0x%"HWADDR_PRIx", "
+                             "0x%"HWADDR_PRIx") = %d (%m)",
+                             container, iova, size, ret);
+                break;
+            }
+        }
+    }
+
+    return ret;
+}

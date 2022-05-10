@@ -244,4 +244,8 @@ int vfio_spapr_remove_window(VFIOContainer *container,
 int vfio_migration_probe(VFIODevice *vbasedev, Error **errp);
 void vfio_migration_finalize(VFIODevice *vbasedev);
 
+int vfio_do_dma_map_range(hwaddr iova, ram_addr_t size,
+                          void *vaddr, bool readonly);
+int vfio_do_dma_unmap_range(hwaddr iova, ram_addr_t size);
+
 #endif /* HW_VFIO_VFIO_COMMON_H */
