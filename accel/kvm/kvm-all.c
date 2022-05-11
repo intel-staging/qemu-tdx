@@ -46,6 +46,7 @@
 #include "sysemu/hw_accel.h"
 #include "kvm-cpus.h"
 #include "sysemu/dirtylimit.h"
+#include "hw/vfio/vfio-common.h"
 
 #include "hw/boards.h"
 #include "monitor/stats.h"
@@ -2922,6 +2923,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     void *addr;
     RAMBlock *rb;
     ram_addr_t offset;
+    int ret = 0;
 
     section = memory_region_find(get_system_memory(), start, size);
     if (!section.mr) {
@@ -2938,10 +2940,32 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
         return 0;
     }
 
+    if (shared_to_private) {
+        ret = vfio_do_dma_unmap_range(start, size);
+        if (ret) {
+            memory_region_unref(section.mr);
+            return ret;
+        }
+    }
+
     addr = memory_region_get_ram_ptr(section.mr) +
         section.offset_within_region;
     rb = qemu_ram_block_from_host(addr, false, &offset);
-    ram_block_convert_range(rb, offset, size, shared_to_private);
+    ret = ram_block_convert_range(rb, offset, size, shared_to_private);
+    if (ret) {
+        memory_region_unref(section.mr);
+        return ret;
+    }
+
+    if (!shared_to_private) {
+        ret = vfio_do_dma_map_range(start, size, addr, section.readonly);
+        if (ret) {
+            vfio_do_dma_unmap_range(start, size);
+            memory_region_unref(section.mr);
+            return ret;
+        }
+    }
+
     memory_region_unref(section.mr);
 
     return kvm_encrypt_mem(start, size, shared_to_private);
