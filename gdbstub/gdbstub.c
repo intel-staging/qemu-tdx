@@ -2203,4 +2203,3 @@ void gdb_create_default_process(GDBState *s)
     process->attached = false;
     process->target_xml[0] = '\0';
 }
-
