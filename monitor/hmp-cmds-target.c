@@ -173,8 +173,8 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
             l = line_size;
         if (is_physical) {
             AddressSpace *as = cs ? cs->as : &address_space_memory;
-            MemTxResult r = address_space_read(as, addr,
-                                               MEMTXATTRS_UNSPECIFIED, buf, l);
+            MemTxResult r = address_space_read_debug(as, addr,
+                                                     MEMTXATTRS_UNSPECIFIED_DEBUG, buf, l);
             if (r != MEMTX_OK) {
                 monitor_printf(mon, " Cannot access memory\n");
                 break;
