@@ -353,11 +353,17 @@ void hmp_sum(Monitor *mon, const QDict *qdict)
     uint16_t sum;
     uint32_t start = qdict_get_int(qdict, "start");
     uint32_t size = qdict_get_int(qdict, "size");
+    uint8_t val;
+    MemTxResult result;
 
     sum = 0;
     for(addr = start; addr < (start + size); addr++) {
-        uint8_t val = address_space_ldub(&address_space_memory, addr,
-                                         MEMTXATTRS_UNSPECIFIED, NULL);
+        result = address_space_read_debug(&address_space_memory, addr,
+                                          MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                          &val, sizeof(val));
+        if (result != MEMTX_OK) {
+            val = 0;
+        }
         /* BSD sum algorithm ('sum' Unix command) */
         sum = (sum >> 1) | (sum << 15);
         sum += val;
