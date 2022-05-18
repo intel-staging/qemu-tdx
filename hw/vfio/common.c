@@ -2627,42 +2627,86 @@ int vfio_eeh_as_op(AddressSpace *as, uint32_t op)
     return vfio_eeh_container_op(container, op);
 }
 
+#define PAGE_SHIFT_4K          12
+#define PAGE_SIZE_4K           (1 << PAGE_SHIFT_4K)
+
+static int vfio_do_dma_map_one_page(VFIOContainer *container, hwaddr iova,
+                             ram_addr_t size, void *vaddr, uint32_t flags)
+{
+    int pagesize = PAGE_SIZE_4K;
+    int ret;
+    struct vfio_iommu_type1_dma_map map = {
+        .argsz = sizeof(map),
+        .flags = flags,
+        .vaddr = (__u64)(uintptr_t)vaddr,
+        .iova = iova,
+        .size = pagesize,
+    };
+
+    for (; map.iova < iova + size;
+         map.iova += pagesize, map.vaddr += pagesize) {
+            ret = ioctl(container->fd, VFIO_IOMMU_MAP_DMA, &map);
+            if (ret) {
+                error_report("VFIO_MAP_DMA (%p, 0x%llx, 0x%llx, 0x%llx) = %d (%m)",
+                             container, map.iova, map.size, map.vaddr, ret);
+                return ret;
+            }
+    }
+
+    return ret;
+}
+
 int vfio_do_dma_map_range(hwaddr iova, ram_addr_t size,
                         void *vaddr, bool readonly)
 {
     VFIOAddressSpace *space;
     VFIOContainer *container;
+    uint32_t flags = VFIO_DMA_MAP_FLAG_READ;
 
     int ret = 0;
-
-    struct vfio_iommu_type1_dma_map map = {
-        .argsz = sizeof(map),
-        .flags = VFIO_DMA_MAP_FLAG_READ,
-        .vaddr = (__u64)(uintptr_t)vaddr,
-        .iova = iova,
-        .size = size,
-    };
 
     if (QLIST_EMPTY(&vfio_address_spaces)) {
         return 0;
     }
 
     if (!readonly) {
-        map.flags |= VFIO_DMA_MAP_FLAG_WRITE;
+        flags |= VFIO_DMA_MAP_FLAG_WRITE;
     }
 
     QLIST_FOREACH(space, &vfio_address_spaces, list) {
         if (space->as != &address_space_memory)
             continue;
         QLIST_FOREACH(container, &space->containers, next) {
-            ret = ioctl(container->fd, VFIO_IOMMU_MAP_DMA, &map);
+            ret = vfio_do_dma_map_one_page(container, iova, size, vaddr, flags);
             if (ret) {
-                error_report("VFIO_MAP_DMA (%p, 0x%"HWADDR_PRIx", "
-                             "0x%"HWADDR_PRIx", %p) = %d (%m)",
-                             container, iova, size, vaddr, ret);
-                break;
+                return ret;
             }
         }
+    }
+    return ret;
+}
+
+static int vfio_do_dma_unmap_one_page(VFIOContainer *container, hwaddr iova,
+                               ram_addr_t size)
+{
+    int pagesize = PAGE_SIZE_4K;
+    int ret;
+    struct vfio_iommu_type1_dma_unmap unmap = {
+        .argsz = sizeof(unmap),
+        .flags = 0,
+        .size = pagesize,
+        .iova = iova,
+    };
+
+    for (; unmap.iova < iova + size;
+         unmap.iova += pagesize) {
+            unmap.size = pagesize;
+            ret = ioctl(container->fd, VFIO_IOMMU_UNMAP_DMA, &unmap);
+            if (ret) {
+                error_report("VFIO_UNMAP_DMA (%p, 0x%llx, 0x%llx) = %d (%m)",
+                             container, unmap.iova, unmap.size, ret);
+                return ret;
+            }
     }
 
     return ret;
@@ -2675,13 +2719,6 @@ int vfio_do_dma_unmap_range(hwaddr iova, ram_addr_t size)
 
     int ret = 0;
 
-    struct vfio_iommu_type1_dma_unmap unmap = {
-        .argsz = sizeof(unmap),
-        .flags = 0,
-        .iova = iova,
-        .size = size,
-    };
-
     if (QLIST_EMPTY(&vfio_address_spaces)) {
         return 0;
     }
@@ -2690,12 +2727,9 @@ int vfio_do_dma_unmap_range(hwaddr iova, ram_addr_t size)
         if (space->as != &address_space_memory)
             continue;
         QLIST_FOREACH(container, &space->containers, next) {
-            ret = ioctl(container->fd, VFIO_IOMMU_UNMAP_DMA, &unmap);
+            ret = vfio_do_dma_unmap_one_page(container, iova, size);
             if (ret) {
-                error_report("VFIO_UNMAP_DMA (%p, 0x%"HWADDR_PRIx", "
-                             "0x%"HWADDR_PRIx") = %d (%m)",
-                             container, iova, size, ret);
-                break;
+                return ret;
             }
         }
     }
