@@ -1116,9 +1116,23 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     out_data = g_malloc(t->buf_len);
     out_len = 0;
     size = 0;
-    while (out_len < t->buf_len) {
-        size = qio_channel_read(
-            QIO_CHANNEL(t->ioc), out_data + out_len, t->buf_len - out_len, &err);
+    while (true) {
+        char *buf;
+        size_t buf_size;
+
+        if (out_len < t->buf_len) {
+            buf = out_data + out_len;
+            buf_size = t->buf_len - out_len;
+        } else {
+            /*
+             * The received data is too large to fit in the shared GPA.
+             * Discard the received data and try to know the data size.
+             */
+            buf = out_data;
+            buf_size = t->buf_len;
+        }
+
+        size = qio_channel_read(QIO_CHANNEL(t->ioc), buf, buf_size, &err);
         if (err) {
             break;
         }
@@ -1134,6 +1148,17 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
     if (out_len == 0 && (err || size < 0)) {
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
         goto error;
+    }
+    if (out_len > 0 && out_len > t->buf_len) {
+        /*
+         * There is no specific error code defined for this case(E2BIG) at the
+         * moment.
+         * TODO: Once an error code for this case is defined in GHCI spec ,
+         * update the error code.
+         */
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
+        t->hdr.out_len = cpu_to_le32(out_len);
+        goto error_hdr;
     }
 
     if (address_space_write(
@@ -1152,6 +1177,7 @@ error:
     if (t->hdr.error_code != cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS)) {
         t->hdr.out_len = cpu_to_le32(0);
     }
+error_hdr:
     if (address_space_write(
             &address_space_memory, t->gpa,
             MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
