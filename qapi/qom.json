@@ -835,10 +835,12 @@
 #
 # Properties for tdx-guest objects.
 #
+# @sept-ve-disable: bit 28 of TD attributes (default: 0)
+#
 # Since: 7.2
 ##
 { 'struct': 'TdxGuestProperties',
-  'data': { }}
+  'data': { '*sept-ve-disable': 'bool' } }
 
 ##
 # @ObjectType:
