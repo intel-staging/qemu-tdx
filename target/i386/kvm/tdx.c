@@ -329,6 +329,21 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+static void print_tdx_ram_entry(void)
+{
+    TdxRamEntry *e;
+    int i;
+
+    for (i = 0; i < tdx_guest->nr_ram_entries; i++) {
+        e = &tdx_guest->ram_entries[i];
+        printf("TDX RAM entry[%d]: address 0x%lx length 0x%lx type %d (%s)\n",
+               i, e->address, e->length, e->type,
+               e->type == TDX_RAM_UNACCEPTED ? "unaccepted" : "accepted");
+    }
+
+    printf("\n\n");
+}
+
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     TdxFirmware *tdvf = &tdx_guest->tdvf;
@@ -358,6 +373,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
 
     qsort(tdx_guest->ram_entries, tdx_guest->nr_ram_entries,
           sizeof(TdxRamEntry), &tdx_ram_entry_compare);
+
+    print_tdx_ram_entry();
 
     tdvf_hob_create(tdx_guest, tdx_get_hob_entry(tdx_guest));
 
