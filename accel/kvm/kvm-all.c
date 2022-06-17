@@ -2898,13 +2898,30 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
+static int kvm_encrypt_mem(hwaddr start, hwaddr size, bool shared_to_private)
+{
+    int r;
+    struct kvm_enc_region range;
+    int ioctl = shared_to_private ? KVM_MEMORY_ENCRYPT_REG_REGION
+                                  : KVM_MEMORY_ENCRYPT_UNREG_REGION;
+
+    range.addr = start;
+    range.size = size;
+
+    r = kvm_vm_ioctl(kvm_state, ioctl, &range);
+    if (r) {
+        warn_report("%s: failed to register region (0x%lx+%#zx) error '%s'",
+                     __func__, start, size, strerror(errno));
+    }
+    return r;
+}
+
 int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
 {
     MemoryRegionSection section;
     void *addr;
     RAMBlock *rb;
     ram_addr_t offset;
-    int ret = -1;
 
     section = memory_region_find(get_system_memory(), start, size);
     if (!section.mr) {
@@ -2924,9 +2941,10 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     addr = memory_region_get_ram_ptr(section.mr) +
         section.offset_within_region;
     rb = qemu_ram_block_from_host(addr, false, &offset);
-    ret = ram_block_convert_range(rb, offset, size, shared_to_private);
+    ram_block_convert_range(rb, offset, size, shared_to_private);
     memory_region_unref(section.mr);
-    return ret;
+
+    return kvm_encrypt_mem(start, size, shared_to_private);
 }
 
 int kvm_cpu_exec(CPUState *cpu)
