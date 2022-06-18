@@ -2921,7 +2921,7 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
-static int kvm_encrypt_reg_region(hwaddr start, hwaddr size, bool reg_region)
+int kvm_encrypt_reg_region(hwaddr start, hwaddr size, bool reg_region)
 {
     int r;
     struct kvm_memory_attributes  attr;
