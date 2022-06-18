@@ -659,6 +659,12 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         __u32 flags = entry->attributes & TDVF_SECTION_ATTRIBUTES_MR_EXTEND ?
                       KVM_TDX_MEASURE_MEMORY_REGION : 0;
 
+	    r = kvm_convert_memory(entry->address, entry->size, true);
+	    if (r < 0) {
+             error_report("Reserve initial private memory failed %s", strerror(-r));
+             exit(1);
+        }
+
         r = tdx_vm_ioctl(KVM_TDX_INIT_MEM_REGION, flags, &mem_region);
         if (r < 0) {
              error_report("KVM_TDX_INIT_MEM_REGION failed %s", strerror(-r));
