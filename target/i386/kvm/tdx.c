@@ -449,6 +449,26 @@ static int tdx_kvm_type(X86ConfidentialGuest *cg)
     return KVM_X86_TDX_VM;
 }
 
+static void print_tdx_caps(void)
+{
+    int i;
+    struct kvm_tdx_cpuid_config *cpuid_config;
+
+    printf("\n\n=== TDX capabilities reported from KVM ioctl(KVM_TDX_CAPABILITIES) ===\n");
+    printf("supported_attrs:  0x%llx\n", tdx_caps->supported_attrs);
+    printf("suspported_xfam:  0x%llx\n", tdx_caps->supported_xfam);
+
+    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+        cpuid_config = &tdx_caps->cpuid_configs[i];
+        printf("cpuid_config[%-2d]: %#-10x 0x%.8x:   0x%08x  0x%08x  0x%08x  0x%08x\n",
+                i, cpuid_config->leaf, cpuid_config->sub_leaf,
+                cpuid_config->eax, cpuid_config->ebx,
+                cpuid_config->ecx, cpuid_config->edx);
+    }
+
+    printf("\n\n");
+}
+
 static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
@@ -479,6 +499,7 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
         if (r) {
             return r;
         }
+        print_tdx_caps();
     }
 
     /*
