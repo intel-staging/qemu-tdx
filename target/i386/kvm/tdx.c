@@ -968,6 +968,29 @@ static Notifier tdx_machine_done_notify = {
     .notify = tdx_finalize_vm,
 };
 
+
+static void print_tdx_caps(void)
+{
+    int i;
+    struct kvm_tdx_cpuid_config *cpuid_config;
+
+    printf("\n\n=== TDX capabilities reported from KVM ioctl(KVM_TDX_CAPABILITIES) ===\n");
+    printf("attrs_fixed0: 0x%llx\n", tdx_caps->attrs_fixed0);
+    printf("attrs_fixed1: 0x%llx\n", tdx_caps->attrs_fixed1);
+    printf("xfam_fixed0:  0x%llx\n", tdx_caps->xfam_fixed0);
+    printf("xfam_fixed1:  0x%llx\n", tdx_caps->xfam_fixed1);
+
+    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+        cpuid_config = &tdx_caps->cpuid_configs[i];
+        printf("cpuid_config[%d]: 0x%8x 0x%.8x:  0x%08x  0x%08x  0x%08x  0x%08x\n",
+                i, cpuid_config->leaf, cpuid_config->sub_leaf,
+                cpuid_config->eax, cpuid_config->ebx,
+                cpuid_config->ecx, cpuid_config->edx);
+    }
+
+    printf("\n\n");
+}
+
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
     X86MachineState *x86ms = X86_MACHINE(ms);
@@ -997,6 +1020,7 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         if (r) {
             return r;
         }
+        print_tdx_caps();
     }
 
     update_tdx_cpuid_lookup_by_tdx_caps();
