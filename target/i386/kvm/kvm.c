@@ -316,6 +316,20 @@ static struct kvm_cpuid2 *try_get_cpuid(KVMState *s, int max)
     return cpuid;
 }
 
+static void pr_cpuid_entries(const char *title, struct kvm_cpuid2 *cpuids)
+{
+    int i, nr = cpuids->nent;
+    struct kvm_cpuid_entry2 *e;
+
+	printf("%s\n", title);
+    for (i = 0; i < nr; i++) {
+        e = cpuids->entries + i;
+        printf("CPUID: 0x%-8x 0x%2x:    0x%08x  0x%08x  0x%08x  0x%08x\n",
+                e->function, e->index, e->eax, e->ebx, e->ecx, e->edx);
+    }
+    printf("\n");
+}
+
 /* Run KVM_GET_SUPPORTED_CPUID ioctl(), allocating a buffer large enough
  * for all entries.
  */
@@ -331,6 +345,7 @@ static struct kvm_cpuid2 *get_supported_cpuid(KVMState *s)
         max *= 2;
     }
     cpuid_cache = cpuid;
+    pr_cpuid_entries("KVM returned KVM_GET_SUPPORTED_CPUID:", cpuid);
     return cpuid;
 }
 
@@ -2248,6 +2263,9 @@ int kvm_arch_init_vcpu(CPUState *cs)
     cpuid_data.cpuid.nent = cpuid_i;
 
     cpuid_data.cpuid.padding = 0;
+
+    pr_cpuid_entries("constructed CPUID for vcpu:", &cpuid_data.cpuid);
+
     r = kvm_vcpu_ioctl(cs, KVM_SET_CPUID2, &cpuid_data);
     if (r) {
         goto fail;
