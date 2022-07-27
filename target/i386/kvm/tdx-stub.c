@@ -25,3 +25,7 @@ void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
 void tdx_apply_xfam_dependencies(CPUState *cpu)
 {
 }
+
+void tdx_check_minus_features(CPUState *cpu)
+{
+}
