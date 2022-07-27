@@ -6324,6 +6324,12 @@ void x86_cpu_expand_features(X86CPU *cpu, Error **errp)
         }
     }
 
+#ifndef CONFIG_USER_ONLY
+    if (is_tdx_vm()) {
+        tdx_check_minus_features(CPU(cpu));
+    }
+#endif
+
     /*TODO: Now cpu->max_features doesn't overwrite features
      * set using QOM properties, and we can convert
      * plus_features & minus_features to global properties
