@@ -141,6 +141,25 @@ static FeatureDep xfam_dependencies[] = {
     },
 };
 
+/*
+ * Select a representative feature for each XFAM-controlled features.
+ * e.g avx for all XFAM[2]. Only this typcial CPUID is allowed to be
+ * configured. This can help prevent unintentional operation by the user.
+ */
+FeatureMask tdx_xfam_representative[] = {
+    [XSTATE_YMM_BIT] = { .index = FEAT_1_ECX, .mask = CPUID_EXT_AVX },
+    [XSTATE_OPMASK_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_ZMM_Hi256_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_Hi16_ZMM_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_AVX512F },
+    [XSTATE_RTIT_BIT] = { .index = FEAT_7_0_EBX, .mask = CPUID_7_0_EBX_INTEL_PT },
+    [XSTATE_PKRU_BIT] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_PKU },
+    [XSTATE_CET_U_BIT] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_CET_SHSTK },
+    [XSTATE_CET_S_BIT] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_CET_SHSTK },
+    [XSTATE_ARCH_LBR_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_ARCH_LBR },
+    [XSTATE_XTILE_CFG_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_TILE },
+    [XSTATE_XTILE_DATA_BIT] = { .index = FEAT_7_0_EDX, .mask = CPUID_7_0_EDX_AMX_TILE },
+};
+
 typedef struct KvmTdxCpuidLookup {
     uint32_t tdx_fixed0;
     uint32_t tdx_fixed1;
@@ -410,6 +429,148 @@ void tdx_apply_xfam_dependencies(CPUState *cpu)
                                      unavailable_features & env->user_plus_features[d->to.index],
                                      "This feature cannot be enabled because its XFAM controlling bit is not enabled");
             env->features[d->to.index] &= ~unavailable_features;
+        }
+    }
+}
+
+static uint64_t tdx_get_xfam_bitmask(FeatureWord w, uint64_t bit_mask)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(xfam_dependencies); i++) {
+        FeatureDep *d = &xfam_dependencies[i];
+        if (w == d->to.index && bit_mask & d->to.mask) {
+            return d->from.mask;
+        }
+    }
+    return 0;
+}
+
+/* return bit field if xfam representative feature, otherwise -1 */
+static int is_tdx_xfam_representative(FeatureWord w, uint64_t bit_mask)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(tdx_xfam_representative); i++) {
+        FeatureMask *fm = &tdx_xfam_representative[i];
+        if (w == fm->index && bit_mask & fm->mask) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static const char *tdx_xfam_representative_name(uint64_t xfam_mask)
+{
+    uint32_t delegate_index, delegate_feature;
+    int bitnr, delegate_bitnr;
+    const char *name;
+
+    bitnr = ctz32(xfam_mask);
+    delegate_index = tdx_xfam_representative[bitnr].index;
+    delegate_feature = tdx_xfam_representative[bitnr].mask;
+    delegate_bitnr = ctz32(delegate_feature);
+    /* get XFAM feature delegate feature name */
+    name = feature_word_info[delegate_index].feat_names[delegate_bitnr];
+    assert(delegate_bitnr < 32 ||
+           !(name &&
+             feature_word_info[delegate_index].type == CPUID_FEATURE_WORD));
+    return name;
+}
+
+static uint64_t tdx_disallow_minus_bits(FeatureWord w)
+{
+    FeatureWordInfo *wi = &feature_word_info[w];
+    uint64_t ret = 0;
+    int i;
+
+    /*
+     * TODO:
+     * enable MSR feature configuration for TDX, disallow MSR feature
+     * manipulation for TDX for now
+     */
+    if (wi->type == MSR_FEATURE_WORD) {
+        return ~0ull;
+    }
+
+    /*
+     * inducing_ve type is fully configured by VMM, i.e., all are allowed
+     * to be removed
+     */
+    if (tdx_cpuid_lookup[w].inducing_ve) {
+        return 0;
+    }
+
+    ret = tdx_cpuid_lookup[w].tdx_fixed1;
+
+    for (i = 0; i < ARRAY_SIZE(xfam_dependencies); i++) {
+        FeatureDep *d = &xfam_dependencies[i];
+        if (w == d->to.index) {
+            ret |= d->to.mask;
+        }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(tdx_xfam_representative); i++) {
+        FeatureMask *fm = &tdx_xfam_representative[i];
+        if (w == fm->index) {
+            ret &= ~fm->mask;
+        }
+    }
+
+    return ret;
+}
+
+void tdx_check_minus_features(CPUState *cpu)
+{
+    X86CPU *x86_cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86_cpu->env;
+    FeatureWordInfo *wi;
+    FeatureWord w;
+    uint64_t disallow_minus_bits;
+    uint64_t bitmask, xfam_controlling_mask;
+    int i;
+
+    char *reason;
+    char xfam_dependency_str[100];
+    char usual[]="TDX limitation";
+
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        wi = &feature_word_info[w];
+
+        if (wi->type == MSR_FEATURE_WORD) {
+            continue;
+        }
+
+        disallow_minus_bits = env->user_minus_features[w] & tdx_disallow_minus_bits(w);
+
+        for (i = 0; i < 64; i++) {
+            bitmask = 1ULL << i;
+            if (!(bitmask & disallow_minus_bits)) {
+                continue;
+            }
+
+            xfam_controlling_mask = tdx_get_xfam_bitmask(w, bitmask);
+            if (xfam_controlling_mask && is_tdx_xfam_representative(w, bitmask) == -1) {
+                /*
+                 * cannot fix env->feature[w] here since whether the bit i is
+                 * set or cleared depends on the setting of its XFAM
+                 * representative feature bit
+                 */
+                snprintf(xfam_dependency_str, sizeof(xfam_dependency_str),
+                         "it depends on XFAM representative feature (%s)",
+                 g_strdup(tdx_xfam_representative_name(xfam_controlling_mask)));
+                reason = xfam_dependency_str;
+            } else {
+                /* set bit i since this feature cannot be removed */
+                env->features[w] |= bitmask;
+                reason = usual;
+            }
+
+            g_autofree char *feature_word_str = feature_word_description(wi, i);
+            warn_report("This feature cannot be removed becuase %s: %s%s%s [bit %d]",
+                         reason, feature_word_str,
+                         wi->feat_names[i] ? "." : "",
+                         wi->feat_names[i] ?: "", i);
         }
     }
 }
