@@ -65,6 +65,7 @@ typedef struct FeatureWordInfo {
 extern FeatureWordInfo feature_word_info[];
 
 void x86_cpu_expand_features(X86CPU *cpu, Error **errp);
+char *feature_word_description(FeatureWordInfo *f, uint32_t bit);
 
 #ifndef CONFIG_USER_ONLY
 GuestPanicInformation *x86_cpu_get_crash_info(CPUState *cs);
