@@ -320,6 +320,38 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
     }
 }
 
+static void update_tdx_cpuid_lookup_by_tdx_caps(void)
+{
+    KvmTdxCpuidLookup *entry;
+    FeatureWordInfo *fi;
+    uint32_t config;
+    FeatureWord w;
+
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        fi = &feature_word_info[w];
+        entry = &tdx_cpuid_lookup[w];
+
+        if (fi->type != CPUID_FEATURE_WORD) {
+            continue;
+        }
+
+        config = tdx_cap_cpuid_config(fi->cpuid.eax,
+                                      fi->cpuid.needs_ecx ? fi->cpuid.ecx : ~0u,
+                                      fi->cpuid.reg);
+
+        if (!config) {
+            continue;
+        }
+
+        /*
+         * Remove the configurable bits from tdx_fixed0/1 in case QEMU
+         * maintained fixed0/1 values is outdated to TDX module.
+         */
+        entry->tdx_fixed0 &= ~config;
+        entry->tdx_fixed1 &= ~config;
+    }
+}
+
 enum tdx_ioctl_level{
     TDX_VM_IOCTL,
     TDX_VCPU_IOCTL,
@@ -673,6 +705,8 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
             return r;
         }
     }
+
+    update_tdx_cpuid_lookup_by_tdx_caps();
 
     /*
      * Set kvm_readonly_mem_allowed to false, because TDX only supports readonly
