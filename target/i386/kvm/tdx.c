@@ -1006,6 +1006,7 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     hwaddr size = vmcall->in_r13;
     int ret = 0;
 
+    trace_tdx_handle_map_gpa(gpa, size, private);
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
 
     if (gpa & ~addr_mask) {
@@ -1245,6 +1246,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     QIOChannelSocket *ioc;
     struct tdx_get_quote_task *t;
 
+    trace_tdx_handle_get_quote(gpa, buf_len);
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
 
     /* GPA must be shared. */
@@ -1345,6 +1347,7 @@ static void tdx_handle_setup_event_notify_interrupt(struct kvm_tdx_vmcall *vmcal
     TdxGuest *tdx = TDX_GUEST(ms->cgs);
     int event_notify_interrupt = vmcall->in_r12;
 
+    trace_tdx_handle_setup_event_notify_interrupt(event_notify_interrupt);
     if (32 <= event_notify_interrupt && event_notify_interrupt <= 255) {
         qemu_mutex_lock(&tdx->lock);
         tdx->event_notify_interrupt = event_notify_interrupt;
