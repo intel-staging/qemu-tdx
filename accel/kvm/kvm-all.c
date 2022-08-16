@@ -2925,6 +2925,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     ram_addr_t offset;
     int ret = 0;
 
+    trace_kvm_convert_memory(start, size, shared_to_private);
     section = memory_region_find(get_system_memory(), start, size);
     if (!section.mr) {
         return -1;
