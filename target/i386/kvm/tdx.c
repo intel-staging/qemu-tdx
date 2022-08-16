@@ -34,6 +34,8 @@
 #include "tdx-quote-generator.h"
 #include "../cpu-internal.h"
 
+#include "trace.h"
+
 #define TDX_MIN_TSC_FREQUENCY_KHZ   (100 * 1000)
 #define TDX_MAX_TSC_FREQUENCY_KHZ   (10 * 1000 * 1000)
 
@@ -416,6 +418,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
             error_report("KVM_TDX_INIT_MEM_REGION failed %s", strerror(-r));
             exit(1);
         }
+
+        trace_init_tdx_fw_entry(entry->type, entry->attributes, (__u64)entry->mem_ptr, entry->address, entry->size >> 12);
 
         if (entry->type == TDVF_SECTION_TYPE_TD_HOB ||
             entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {

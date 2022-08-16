@@ -13,3 +13,6 @@ kvm_xen_soft_reset(void) ""
 kvm_xen_set_shared_info(uint64_t gfn) "shared info at gfn 0x%" PRIx64
 kvm_xen_set_vcpu_attr(int cpu, int type, uint64_t gpa) "vcpu attr cpu %d type %d gpa 0x%" PRIx64
 kvm_xen_set_vcpu_callback(int cpu, int vector) "callback vcpu %d vector %d"
+
+# tdx.c
+init_tdx_fw_entry(uint32_t type, uint32_t attributes, uint64_t source_addr, uint64_t gpa, uint32_t nr_pages) "type=0x%x attributes=0x%x source=0x%"PRIx64 " gpa=0x%"PRIx64 " nr_pages=0x%"PRIx32
