@@ -376,7 +376,8 @@ static void fw_cfg_dma_transfer(FWCfgState *s)
     } else {
         dma.length = 0;
     }
-
+    trace_fw_cfg_transfer(dma.address, dma.length, arch,
+                          (s->cur_entry & FW_CFG_ENTRY_MASK), read, write);
     dma.control = 0;
 
     while (dma.length > 0 && !(dma.control & FW_CFG_DMA_CTL_ERROR)) {
