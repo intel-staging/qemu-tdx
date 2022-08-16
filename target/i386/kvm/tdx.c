@@ -35,6 +35,8 @@
 #include "tdx.h"
 #include "../cpu-internal.h"
 
+#include "trace.h"
+
 #define TDX_SUPPORTED_KVM_FEATURES  ((1U << KVM_FEATURE_NOP_IO_DELAY) | \
                                      (1U << KVM_FEATURE_PV_UNHALT) | \
                                      (1U << KVM_FEATURE_PV_TLB_FLUSH) | \
@@ -655,6 +657,7 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         __u32 flags = entry->attributes & TDVF_SECTION_ATTRIBUTES_MR_EXTEND ?
                       KVM_TDX_MEASURE_MEMORY_REGION : 0;
 
+        trace_kvm_tdx_init_mem_region(entry->type, entry->attributes, mem_region.source_addr, mem_region.gpa, mem_region.nr_pages);
         r = tdx_vm_ioctl(KVM_TDX_INIT_MEM_REGION, flags, &mem_region);
         if (r < 0) {
              error_report("KVM_TDX_INIT_MEM_REGION failed %s", strerror(-r));
