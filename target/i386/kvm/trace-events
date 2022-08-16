@@ -16,3 +16,6 @@ kvm_xen_set_vcpu_callback(int cpu, int vector) "callback vcpu %d vector %d"
 
 # tdx.c
 init_tdx_fw_entry(uint32_t type, uint32_t attributes, uint64_t source_addr, uint64_t gpa, uint32_t nr_pages) "type=0x%x attributes=0x%x source=0x%"PRIx64 " gpa=0x%"PRIx64 " nr_pages=0x%"PRIx32
+tdx_handle_map_gpa(uint64_t gpa, uint64_t size, const char *private) "gpa 0x%"PRIx64" size 0x%"PRIx64" %s"
+tdx_handle_get_quote(uint64_t gpa, uint64_t len) "gpa 0x%"PRIx64" len 0x%"PRIx64
+tdx_handle_setup_event_notify_interrupt(int event_notify_interrupt) "interrupt %d"
