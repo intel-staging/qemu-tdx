@@ -35,6 +35,8 @@
 #include "tdx-quote-generator.h"
 #include "../cpu-internal.h"
 
+#include "trace.h"
+
 #define TDX_SUPPORTED_KVM_FEATURES  ((1U << KVM_FEATURE_NOP_IO_DELAY) | \
                                      (1U << KVM_FEATURE_PV_UNHALT) | \
                                      (1U << KVM_FEATURE_PV_TLB_FLUSH) | \
@@ -678,6 +680,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
                 exit(1);
             }
         }
+
+        trace_kvm_tdx_init_mem_region(entry->type, entry->attributes, (__u64)entry->mem_ptr, entry->address, entry->size >> 12);
 
         if (entry->type == TDVF_SECTION_TYPE_TD_HOB ||
             entry->type == TDVF_SECTION_TYPE_TEMP_MEM) {
