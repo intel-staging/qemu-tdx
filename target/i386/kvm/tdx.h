@@ -48,6 +48,7 @@ typedef struct TdxGuest {
 
     /* runtime state */
     int event_notify_interrupt;
+    uint32_t apic_id;
 
     /* GetQuote */
     int quote_generation_num;
