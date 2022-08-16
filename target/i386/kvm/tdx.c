@@ -915,6 +915,7 @@ static void tdx_guest_init(Object *obj)
                             tdx_guest_set_quote_generation);
 
     tdx->event_notify_interrupt = -1;
+    tdx->apic_id = -1;
 }
 
 static void tdx_guest_finalize(Object *obj)
@@ -1315,7 +1316,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     ioc = qio_channel_socket_new();
 
     t = g_malloc(sizeof(*t));
-    t->apic_id = cpu->apic_id;
+    t->apic_id = tdx->apic_id;
     t->gpa = gpa;
     t->buf_len = buf_len;
     t->out_data = g_malloc(t->buf_len);
@@ -1344,7 +1345,8 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
 }
 
-static void tdx_handle_setup_event_notify_interrupt(struct kvm_tdx_vmcall *vmcall)
+static void tdx_handle_setup_event_notify_interrupt(
+    X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
     TdxGuest *tdx = TDX_GUEST(ms->cgs);
@@ -1353,6 +1355,7 @@ static void tdx_handle_setup_event_notify_interrupt(struct kvm_tdx_vmcall *vmcal
     if (32 <= event_notify_interrupt && event_notify_interrupt <= 255) {
         qemu_mutex_lock(&tdx->lock);
         tdx->event_notify_interrupt = event_notify_interrupt;
+        tdx->apic_id = cpu->apic_id;
         qemu_mutex_unlock(&tdx->lock);
         vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
     }
@@ -1374,7 +1377,7 @@ static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         tdx_handle_get_quote(cpu, vmcall);
         break;
     case TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT:
-        tdx_handle_setup_event_notify_interrupt(vmcall);
+        tdx_handle_setup_event_notify_interrupt(cpu, vmcall);
         break;
     default:
         warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",
