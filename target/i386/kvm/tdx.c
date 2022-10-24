@@ -423,6 +423,7 @@ static int tdx_kvm_type(X86ConfidentialGuest *cg)
 static void tdx_cpu_instance_init(X86ConfidentialGuest *cg, CPUState *cpu)
 {
     object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
+    object_property_set_bool(OBJECT(cpu), "lmce", false, &error_abort);
 }
 
 static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **errp)
