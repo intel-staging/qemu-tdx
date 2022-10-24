@@ -419,6 +419,7 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
 static void tdx_cpu_post_init(X86ConfidentialGuest *cg, CPUState *cpu)
 {
     object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
+    object_property_set_bool(OBJECT(cpu), "lmce", false, &error_abort);
 }
 
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
