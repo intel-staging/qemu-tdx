@@ -987,6 +987,8 @@ struct tdx_get_quote_task {
     uint32_t apic_id;
     hwaddr gpa;
     uint64_t buf_len;
+    char *out_data;
+    uint64_t out_len;
     struct tdx_get_quote_header hdr;
     int event_notify_interrupt;
     QIOChannelSocket *ioc;
@@ -1072,78 +1074,53 @@ static void tdx_td_notify(struct tdx_get_quote_task *t)
     }
 }
 
-/*
- * TODO: If QGS doesn't reply for long time, make it an error and interrupt
- * guest.
- */
-static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
+static void tdx_get_quote_read(void *opaque)
 {
     struct tdx_get_quote_task *t = opaque;
+    ssize_t size = 0;
     Error *err = NULL;
-    char *in_data = NULL;
-    char *out_data = NULL;
-    size_t out_len;
-    ssize_t size;
     MachineState *ms;
     TdxGuest *tdx;
 
-    t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
-    if (qio_task_propagate_error(task, NULL)) {
-        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
-        goto error;
-    }
-
-    in_data = g_malloc(le32_to_cpu(t->hdr.in_len));
-    if (address_space_read(&address_space_memory, t->gpa + sizeof(t->hdr),
-                           MEMTXATTRS_UNSPECIFIED, in_data,
-                           le32_to_cpu(t->hdr.in_len)) != MEMTX_OK) {
-        goto error;
-    }
-
-    if (qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data,
-                              le32_to_cpu(t->hdr.in_len), &err) ||
-        err) {
-        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
-        goto error;
-    }
-
-    out_data = g_malloc(t->buf_len);
-    out_len = 0;
-    size = 0;
     while (true) {
         char *buf;
         size_t buf_size;
 
-        if (out_len < t->buf_len) {
-            buf = out_data + out_len;
-            buf_size = t->buf_len - out_len;
+        if (t->out_len < t->buf_len) {
+            buf = t->out_data + t->out_len;
+            buf_size = t->buf_len - t->out_len;
         } else {
             /*
              * The received data is too large to fit in the shared GPA.
              * Discard the received data and try to know the data size.
              */
-            buf = out_data;
+            buf = t->out_data;
             buf_size = t->buf_len;
         }
 
         size = qio_channel_read(QIO_CHANNEL(t->ioc), buf, buf_size, &err);
-        if (err) {
+        if (!size) {
             break;
         }
-        if (size <= 0) {
-            break;
+
+        if (size < 0) {
+            if (size == QIO_CHANNEL_ERR_BLOCK) {
+                return;
+            } else {
+                break;
+            }
         }
-        out_len += size;
+        t->out_len += size;
     }
     /*
-     * Treat partial read as success and let the QGS client to handle it because
-     * the client knows better about the QGS.
+     * If partial read successfully but return error at last, also treat it
+     * as failure.
      */
-    if (out_len == 0 && (err || size < 0)) {
+    if (size < 0) {
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
         goto error;
     }
-    if (out_len > 0 && out_len > t->buf_len) {
+    if (t->out_len > 0 && t->out_len > t->buf_len) {
         /*
          * There is no specific error code defined for this case(E2BIG) at the
          * moment.
@@ -1151,20 +1128,20 @@ static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
          * update the error code.
          */
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
-        t->hdr.out_len = cpu_to_le32(out_len);
+        t->hdr.out_len = cpu_to_le32(t->out_len);
         goto error_hdr;
     }
 
     if (address_space_write(
             &address_space_memory, t->gpa + sizeof(t->hdr),
-            MEMTXATTRS_UNSPECIFIED, out_data, out_len) != MEMTX_OK) {
+            MEMTXATTRS_UNSPECIFIED, t->out_data, t->out_len) != MEMTX_OK) {
         goto error;
     }
     /*
      * Even if out_len == 0, it's a success.  It's up to the QGS-client contract
      * how to interpret the zero-sized message as return message.
      */
-    t->hdr.out_len = cpu_to_le32(out_len);
+    t->hdr.out_len = cpu_to_le32(t->out_len);
     t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS);
 
 error:
@@ -1175,14 +1152,15 @@ error_hdr:
     if (address_space_write(
             &address_space_memory, t->gpa,
             MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
-        error_report("TDX: failed to updsate GetQuote header.\n");
+        error_report("TDX: failed to update GetQuote header.");
     }
     tdx_td_notify(t);
 
+    qemu_set_fd_handler(t->ioc->fd, NULL, NULL, NULL);
     qio_channel_close(QIO_CHANNEL(t->ioc), &err);
     object_unref(OBJECT(t->ioc));
-    g_free(in_data);
-    g_free(out_data);
+    g_free(t->out_data);
+    g_free(t);
 
     /* Maintain the number of in-flight requests. */
     ms = MACHINE(qdev_get_machine());
@@ -1190,7 +1168,71 @@ error_hdr:
     qemu_mutex_lock(&tdx->lock);
     tdx->quote_generation_num--;
     qemu_mutex_unlock(&tdx->lock);
+}
 
+/*
+ * TODO: If QGS doesn't reply for long time, make it an error and interrupt
+ * guest.
+ */
+static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
+{
+    struct tdx_get_quote_task *t = opaque;
+    Error *err = NULL;
+    char *in_data = NULL;
+    MachineState *ms;
+    TdxGuest *tdx;
+
+    t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
+    if (qio_task_propagate_error(task, NULL)) {
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
+        goto error;
+    }
+
+    in_data = g_malloc(le32_to_cpu(t->hdr.in_len));
+    if (!in_data) {
+        goto error;
+    }
+
+    if (address_space_read(&address_space_memory, t->gpa + sizeof(t->hdr),
+                           MEMTXATTRS_UNSPECIFIED, in_data,
+                           le32_to_cpu(t->hdr.in_len)) != MEMTX_OK) {
+        goto error;
+    }
+
+    qio_channel_set_blocking(QIO_CHANNEL(t->ioc), false, NULL);
+
+    if (qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data,
+                              le32_to_cpu(t->hdr.in_len), &err) ||
+        err) {
+        t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
+        goto error;
+    }
+
+    g_free(in_data);
+    qemu_set_fd_handler(t->ioc->fd, tdx_get_quote_read, NULL, t);
+
+    return;
+error:
+    t->hdr.out_len = cpu_to_le32(0);
+
+    if (address_space_write(
+            &address_space_memory, t->gpa,
+            MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
+        error_report("TDX: failed to update GetQuote header.\n");
+    }
+    tdx_td_notify(t);
+
+    qio_channel_close(QIO_CHANNEL(t->ioc), &err);
+    object_unref(OBJECT(t->ioc));
+    g_free(t);
+    g_free(in_data);
+
+    /* Maintain the number of in-flight requests. */
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    qemu_mutex_lock(&tdx->lock);
+    tdx->quote_generation_num--;
+    qemu_mutex_unlock(&tdx->lock);
     return;
 }
 
@@ -1259,6 +1301,8 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     t->apic_id = cpu->apic_id;
     t->gpa = gpa;
     t->buf_len = buf_len;
+    t->out_data = g_malloc(t->buf_len);
+    t->out_len = 0;
     t->hdr = hdr;
     t->ioc = ioc;
 
@@ -1269,13 +1313,14 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         qemu_mutex_unlock(&tdx->lock);
         vmcall->status_code = TDG_VP_VMCALL_RETRY;
         object_unref(OBJECT(ioc));
+        g_free(t->out_data);
         g_free(t);
         return;
     }
     tdx->quote_generation_num++;
     t->event_notify_interrupt = tdx->event_notify_interrupt;
     qio_channel_socket_connect_async(
-        ioc, tdx->quote_generation, tdx_handle_get_quote_connected, t, g_free,
+        ioc, tdx->quote_generation, tdx_handle_get_quote_connected, t, NULL,
         NULL);
     qemu_mutex_unlock(&tdx->lock);
 
