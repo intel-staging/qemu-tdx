@@ -207,7 +207,7 @@ static void tdx_guest_init(Object *obj)
     TdxGuest *tdx = TDX_GUEST(obj);
 
     cgs->require_guest_memfd = true;
-    tdx->attributes = 0;
+    tdx->attributes = TDX_TD_ATTRIBUTES_SEPT_VE_DISABLE;
 
     qemu_mutex_init(&tdx->lock);
  
