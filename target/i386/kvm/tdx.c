@@ -1064,6 +1064,8 @@ struct tdx_get_quote_task {
     struct tdx_get_quote_header hdr;
     int event_notify_interrupt;
     QIOChannelSocket *ioc;
+    QEMUTimer timer;
+    bool timer_armed;
 };
 
 struct x86_msi {
@@ -1146,13 +1148,49 @@ static void tdx_td_notify(struct tdx_get_quote_task *t)
     }
 }
 
+static void tdx_getquote_task_cleanup(struct tdx_get_quote_task *t, bool outlen_overflow)
+{
+    MachineState *ms;
+    TdxGuest *tdx;
+
+    if (t->hdr.error_code != cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS) && !outlen_overflow) {
+        t->hdr.out_len = cpu_to_le32(0);
+    }
+
+    /* Publish the response contents before marking this request completed. */
+    smp_wmb();
+    if (address_space_write(
+            &address_space_memory, t->gpa,
+            MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
+        error_report("TDX: failed to update GetQuote header.");
+    }
+    tdx_td_notify(t);
+
+    if (t->ioc->fd > 0) {
+        qemu_set_fd_handler(t->ioc->fd, NULL, NULL, NULL);
+    }
+    qio_channel_close(QIO_CHANNEL(t->ioc), NULL);
+    object_unref(OBJECT(t->ioc));
+    if (t->timer_armed)
+        timer_del(&t->timer);
+    g_free(t->out_data);
+    g_free(t);
+
+    /* Maintain the number of in-flight requests. */
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    qemu_mutex_lock(&tdx->lock);
+    tdx->quote_generation_num--;
+    qemu_mutex_unlock(&tdx->lock);
+}
+
+
 static void tdx_get_quote_read(void *opaque)
 {
     struct tdx_get_quote_task *t = opaque;
     ssize_t size = 0;
     Error *err = NULL;
-    MachineState *ms;
-    TdxGuest *tdx;
+    bool outlen_overflow = false;
 
     while (true) {
         char *buf;
@@ -1197,11 +1235,12 @@ static void tdx_get_quote_read(void *opaque)
          * There is no specific error code defined for this case(E2BIG) at the
          * moment.
          * TODO: Once an error code for this case is defined in GHCI spec ,
-         * update the error code.
+         * update the error code and the tdx_getquote_task_cleanup() argument.
          */
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
         t->hdr.out_len = cpu_to_le32(t->out_len);
-        goto error_hdr;
+        outlen_overflow = true;
+        goto error;
     }
 
     if (address_space_write(
@@ -1217,94 +1256,77 @@ static void tdx_get_quote_read(void *opaque)
     t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS);
 
 error:
-    if (t->hdr.error_code != cpu_to_le64(TDX_VP_GET_QUOTE_SUCCESS)) {
-        t->hdr.out_len = cpu_to_le32(0);
-    }
-error_hdr:
-    if (address_space_write(
-            &address_space_memory, t->gpa,
-            MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
-        error_report("TDX: failed to update GetQuote header.");
-    }
-    tdx_td_notify(t);
-
-    qemu_set_fd_handler(t->ioc->fd, NULL, NULL, NULL);
-    qio_channel_close(QIO_CHANNEL(t->ioc), &err);
-    object_unref(OBJECT(t->ioc));
-    g_free(t->out_data);
-    g_free(t);
-
-    /* Maintain the number of in-flight requests. */
-    ms = MACHINE(qdev_get_machine());
-    tdx = TDX_GUEST(ms->cgs);
-    qemu_mutex_lock(&tdx->lock);
-    tdx->quote_generation_num--;
-    qemu_mutex_unlock(&tdx->lock);
+    tdx_getquote_task_cleanup(t, outlen_overflow);
 }
 
-/*
- * TODO: If QGS doesn't reply for long time, make it an error and interrupt
- * guest.
- */
+#define TRANSACTION_TIMEOUT 30000
+
+static void getquote_timer_expired(void *opaque)
+{
+    struct tdx_get_quote_task *t = opaque;
+
+    tdx_getquote_task_cleanup(t, false);
+}
+
+static void tdx_transaction_start(struct tdx_get_quote_task *t)
+{
+    int64_t time;
+
+    time = qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL);
+    /*
+     * Timeout callback and fd callback both run in main loop thread,
+     * thus no need to worry about race condition.
+     */
+    qemu_set_fd_handler(t->ioc->fd, tdx_get_quote_read, NULL, t);
+    timer_init_ms(&t->timer, QEMU_CLOCK_VIRTUAL, getquote_timer_expired, t);
+    timer_mod(&t->timer, time + TRANSACTION_TIMEOUT);
+    t->timer_armed = true;
+}
+
 static void tdx_handle_get_quote_connected(QIOTask *task, gpointer opaque)
 {
     struct tdx_get_quote_task *t = opaque;
     Error *err = NULL;
     char *in_data = NULL;
-    MachineState *ms;
-    TdxGuest *tdx;
+    int ret = 0;
 
     t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_ERROR);
-    if (qio_task_propagate_error(task, NULL)) {
+    ret = qio_task_propagate_error(task, NULL);
+    if (ret) {
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
-        goto error;
+        goto out;
     }
 
     in_data = g_malloc(le32_to_cpu(t->hdr.in_len));
     if (!in_data) {
-        goto error;
+        ret = -1;
+        goto out;
     }
 
-    if (address_space_read(&address_space_memory, t->gpa + sizeof(t->hdr),
-                           MEMTXATTRS_UNSPECIFIED, in_data,
-                           le32_to_cpu(t->hdr.in_len)) != MEMTX_OK) {
-        goto error;
+    ret = address_space_read(&address_space_memory, t->gpa + sizeof(t->hdr),
+                             MEMTXATTRS_UNSPECIFIED, in_data,
+                             le32_to_cpu(t->hdr.in_len));
+    if (ret) {
+        g_free(in_data);
+        goto out;
     }
 
     qio_channel_set_blocking(QIO_CHANNEL(t->ioc), false, NULL);
 
-    if (qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data,
-                              le32_to_cpu(t->hdr.in_len), &err) ||
-        err) {
+    ret = qio_channel_write_all(QIO_CHANNEL(t->ioc), in_data,
+                              le32_to_cpu(t->hdr.in_len), &err);
+    if (ret) {
         t->hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
-        goto error;
+        g_free(in_data);
+        goto out;
     }
 
-    g_free(in_data);
-    qemu_set_fd_handler(t->ioc->fd, tdx_get_quote_read, NULL, t);
-
-    return;
-error:
-    t->hdr.out_len = cpu_to_le32(0);
-
-    if (address_space_write(
-            &address_space_memory, t->gpa,
-            MEMTXATTRS_UNSPECIFIED, &t->hdr, sizeof(t->hdr)) != MEMTX_OK) {
-        error_report("TDX: failed to update GetQuote header.\n");
+out:
+    if (ret) {
+        tdx_getquote_task_cleanup(t, false);
+    } else {
+        tdx_transaction_start(t);
     }
-    tdx_td_notify(t);
-
-    qio_channel_close(QIO_CHANNEL(t->ioc), &err);
-    object_unref(OBJECT(t->ioc));
-    g_free(t);
-    g_free(in_data);
-
-    /* Maintain the number of in-flight requests. */
-    ms = MACHINE(qdev_get_machine());
-    tdx = TDX_GUEST(ms->cgs);
-    qemu_mutex_lock(&tdx->lock);
-    tdx->quote_generation_num--;
-    qemu_mutex_unlock(&tdx->lock);
     return;
 }
 
@@ -1377,6 +1399,7 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     t->out_len = 0;
     t->hdr = hdr;
     t->ioc = ioc;
+    t->timer_armed = false;
 
     qemu_mutex_lock(&tdx->lock);
     if (!tdx->quote_generation ||
