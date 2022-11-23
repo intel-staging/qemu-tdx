@@ -2516,7 +2516,7 @@ static void qemu_process_early_options(void)
 
     /* Open the logfile at this point and set the log mask if necessary.  */
     {
-        int mask = 0;
+        int mask = LOG_GUEST_ERROR;
         if (log_mask) {
             mask = qemu_str_to_log_mask(log_mask);
             if (!mask) {
