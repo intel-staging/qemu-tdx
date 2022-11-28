@@ -914,13 +914,17 @@
 #     e.g., specific to the workload rather than the run-time or OS.
 #     base64 encoded SHA384 digest.
 #
+# @quote-generation-socket: socket address for Quote Generation
+#     Service(QGS)
+#
 # Since: 9.0
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*sept-ve-disable': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
-            '*mrownerconfig': 'str' } }
+            '*mrownerconfig': 'str',
+            '*quote-generation-socket': 'SocketAddress' } }
 
 ##
 # @ThreadContextProperties:
