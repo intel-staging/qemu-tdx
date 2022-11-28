@@ -27,10 +27,13 @@
 #include "cpu.h"
 #include "cpu-internal.h"
 #include "host-cpu.h"
+#include "hw/i386/apic_internal.h"
+#include "hw/i386/apic-msidef.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/tdvf.h"
 #include "hw/i386/x86.h"
 #include "hw/i386/tdvf-hob.h"
+#include "hw/pci/msi.h"
 #include "kvm_i386.h"
 #include "tdx.h"
 #include "tdx-quote-generator.h"
@@ -1069,6 +1072,28 @@ static hwaddr tdx_shared_bit(X86CPU *cpu)
     return (cpu->guest_phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
 }
 
+static void tdx_inject_interrupt(uint32_t apicid, uint32_t vector)
+{
+    int ret;
+
+    if (vector < 32 || vector > 255) {
+        return;
+    }
+
+    MSIMessage msg = {
+        .address = ((apicid & 0xff) << MSI_ADDR_DEST_ID_SHIFT) |
+                   (((uint64_t)apicid & 0xffffff00) << 32),
+        .data = vector | (APIC_DM_FIXED << MSI_DATA_DELIVERY_MODE_SHIFT),
+    };
+
+    ret = kvm_irqchip_send_msi(kvm_state, msg);
+    if (ret < 0) {
+        /* In this case, no better way to tell it to guest.  Log it. */
+        error_report("TDX: injection %d failed, interrupt lost (%s).\n",
+                     vector, strerror(-ret));
+    }
+}
+
 static void tdx_get_quote_completion(struct tdx_generate_quote_task *task)
 {
     int ret;
@@ -1093,6 +1118,9 @@ static void tdx_get_quote_completion(struct tdx_generate_quote_task *task)
     if (ret != MEMTX_OK) {
         error_report("TDX: get-quote: failed to update GetQuote header.");
     }
+
+    tdx_inject_interrupt(tdx_guest->event_notify_apicid,
+                         tdx_guest->event_notify_vector);
 
     g_free(task->send_data);
     g_free(task->receive_buf);
@@ -1208,6 +1236,22 @@ int tdx_handle_get_quote(X86CPU *cpu, struct kvm_run *run)
     return 0;
 }
 
+int tdx_handle_setup_event_notify(X86CPU *cpu, struct kvm_run *run)
+{
+    uint8_t vector = run->tdx_setup_event_notify.vector;
+
+    if (vector >= 32) {
+        qemu_mutex_lock(&tdx_guest->lock);
+        tdx_guest->event_notify_vector = vector;
+        tdx_guest->event_notify_apicid = cpu->apic_id;
+        qemu_mutex_unlock(&tdx_guest->lock);
+        run->tdx_setup_event_notify.ret = TDG_VP_VMCALL_SUCCESS;
+    } else {
+        run->tdx_setup_event_notify.ret = TDG_VP_VMCALL_INVALID_OPERAND;
+    }
+
+    return 0;
+}
 
 static void tdx_panicked_on_fatal_error(X86CPU *cpu, uint64_t error_code,
                                         char *message, uint64_t gpa)
@@ -1409,6 +1453,9 @@ static void tdx_guest_init(Object *obj)
                             tdx_guest_get_quote_generation,
                             tdx_guest_set_quote_generation,
                             NULL, NULL);
+
+    tdx->event_notify_vector = -1;
+    tdx->event_notify_apicid = -1;
 }
 
 static void tdx_guest_finalize(Object *obj)
