@@ -894,13 +894,17 @@
 #
 # @mrownerconfig: base64 MROWNERCONFIG SHA384 digest
 #
+# @quote-generation-socket: socket address for Quote Generation
+#     Service(QGS)
+#
 # Since: 9.0
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*sept-ve-disable': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
-            '*mrownerconfig': 'str' } }
+            '*mrownerconfig': 'str',
+            '*quote-generation-socket': 'SocketAddress' } }
 
 ##
 # @ThreadContextProperties:
