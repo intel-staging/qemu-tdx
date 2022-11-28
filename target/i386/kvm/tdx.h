@@ -9,6 +9,8 @@
 #include "hw/i386/tdvf.h"
 #include "sysemu/kvm.h"
 
+#include "tdx-quote-generator.h"
+
 #define TYPE_TDX_GUEST "tdx-guest"
 #define TDX_GUEST(obj)  OBJECT_CHECK(TdxGuest, (obj), TYPE_TDX_GUEST)
 
@@ -16,6 +18,7 @@ typedef struct TdxGuestClass {
     X86ConfidentialGuestClass parent_class;
 } TdxGuestClass;
 
+#define TDG_VP_VMCALL_GET_QUOTE                         0x10002ULL
 #define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
 
 #define TDG_VP_VMCALL_SUCCESS           0x0000000000000000ULL
@@ -55,6 +58,9 @@ typedef struct TdxGuest {
     /* runtime state */
     uint32_t event_notify_vector;
     uint32_t event_notify_apicid;
+
+    /* GetQuote */
+    TdxQuoteGenerator *quote_generator;
 } TdxGuest;
 
 #ifdef CONFIG_TDX

@@ -16,16 +16,22 @@
 #include "qemu/base64.h"
 #include "qemu/mmap-alloc.h"
 #include "qapi/error.h"
+#include "qapi/qapi-visit-sockets.h"
 #include "qom/object_interfaces.h"
 #include "sysemu/sysemu.h"
 #include "exec/ramblock.h"
 
+#include "hw/i386/apic_internal.h"
+#include "hw/i386/apic-msidef.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
 #include "hw/i386/tdvf.h"
 #include "hw/i386/tdvf-hob.h"
+#include "hw/pci/msi.h"
 #include "kvm_i386.h"
 #include "tdx.h"
+#include "tdx-quote-generator.h"
+#include "../cpu-internal.h"
 
 #define TDX_MIN_TSC_FREQUENCY_KHZ   (100 * 1000)
 #define TDX_MAX_TSC_FREQUENCY_KHZ   (10 * 1000 * 1000)
@@ -527,6 +533,175 @@ int tdx_parse_tdvf(void *flash_ptr, int size)
     return tdvf_parse_metadata(&tdx_guest->tdvf, flash_ptr, size);
 }
 
+static void tdx_inject_interrupt(uint32_t apicid, uint32_t vector)
+{
+    int ret;
+
+    if (vector < 32 || vector > 255) {
+        return;
+    }
+
+    MSIMessage msg = {
+        .address = ((apicid & 0xff) << MSI_ADDR_DEST_ID_SHIFT) |
+                   (((uint64_t)apicid & 0xffffff00) << 32),
+        .data = vector | (APIC_DM_FIXED << MSI_DATA_DELIVERY_MODE_SHIFT),
+    };
+
+    ret = kvm_irqchip_send_msi(kvm_state, msg);
+    if (ret < 0) {
+        /* In this case, no better way to tell it to guest.  Log it. */
+        error_report("TDX: injection %d failed, interrupt lost (%s).\n",
+                     vector, strerror(-ret));
+    }
+}
+
+static hwaddr tdx_shared_bit(X86CPU *cpu)
+{
+    return (cpu->phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
+}
+
+static void tdx_get_quote_completion(struct tdx_generate_quote_task *task)
+{
+    int ret;
+
+    if (task->status_code == TDX_VP_GET_QUOTE_SUCCESS) {
+        ret = address_space_write(&address_space_memory, task->payload_gpa,
+                                  MEMTXATTRS_UNSPECIFIED, task->receive_buf,
+                                  task->receive_buf_received);
+        if (ret != MEMTX_OK) {
+            error_report("TDX: get-quote: failed to write quote data.\n");
+        } else {
+            task->hdr.out_len = cpu_to_le64(task->receive_buf_received);
+        }
+    }
+    task->hdr.error_code = cpu_to_le32(task->status_code);
+
+    /* Publish the response contents before marking this request completed. */
+    smp_wmb();
+    ret = address_space_write(&address_space_memory, task->buf_gpa,
+                              MEMTXATTRS_UNSPECIFIED, &task->hdr,
+                              TDX_GET_QUOTE_HDR_SIZE);
+    if (ret != MEMTX_OK) {
+        error_report("TDX: get-quote: failed to update GetQuote header.");
+    }
+
+    tdx_inject_interrupt(tdx_guest->event_notify_apicid,
+                         tdx_guest->event_notify_vector);
+
+    g_free(task->send_data);
+    g_free(task->receive_buf);
+    g_free(task);
+}
+
+static int tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    struct tdx_generate_quote_task *task;
+    struct tdx_get_quote_header hdr;
+    hwaddr buf_gpa = vmcall->in_r12;
+    uint64_t buf_len = vmcall->in_r13;
+
+    QEMU_BUILD_BUG_ON(sizeof(struct tdx_get_quote_header) != TDX_GET_QUOTE_HDR_SIZE);
+
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    if (buf_len == 0) {
+        return 0;
+    }
+
+    /* GPA must be shared. */
+    if (!(buf_gpa & tdx_shared_bit(cpu))) {
+        return 0;
+    }
+    buf_gpa &= ~tdx_shared_bit(cpu);
+
+    if (!QEMU_IS_ALIGNED(buf_gpa, 4096) || !QEMU_IS_ALIGNED(buf_len, 4096)) {
+        vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
+        return 0;
+    }
+
+    if (address_space_read(&address_space_memory, buf_gpa, MEMTXATTRS_UNSPECIFIED,
+                           &hdr, TDX_GET_QUOTE_HDR_SIZE) != MEMTX_OK) {
+        error_report("TDX: get-quote: failed to read GetQuote header.\n");
+        return -1;
+    }
+
+    if (le64_to_cpu(hdr.structure_version) != TDX_GET_QUOTE_STRUCTURE_VERSION) {
+        return 0;
+    }
+
+    /*
+     * Paranoid: Guest should clear error_code and out_len to avoid information
+     * leak.  Enforce it.  The initial value of them doesn't matter for qemu to
+     * process the request.
+     */
+    if (le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS ||
+        le32_to_cpu(hdr.out_len) != 0) {
+        return 0;
+    }
+
+    /* Only safe-guard check to avoid too large buffer size. */
+    if (buf_len > TDX_GET_QUOTE_MAX_BUF_LEN ||
+        le32_to_cpu(hdr.in_len) > buf_len - TDX_GET_QUOTE_HDR_SIZE) {
+        return 0;
+    }
+
+    vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    if (!tdx_guest->quote_generator) {
+        hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_QGS_UNAVAILABLE);
+        if (address_space_write(&address_space_memory, buf_gpa,
+                                MEMTXATTRS_UNSPECIFIED,
+                                &hdr, TDX_GET_QUOTE_HDR_SIZE) != MEMTX_OK) {
+            error_report("TDX: failed to update GetQuote header.\n");
+            return -1;
+        }
+        return 0;
+    }
+
+    qemu_mutex_lock(&tdx_guest->quote_generator->lock);
+    if (tdx_guest->quote_generator->num >= TDX_MAX_GET_QUOTE_REQUEST) {
+        qemu_mutex_unlock(&tdx_guest->quote_generator->lock);
+        vmcall->status_code = TDG_VP_VMCALL_RETRY;
+        return 0;
+    }
+    tdx_guest->quote_generator->num++;
+    qemu_mutex_unlock(&tdx_guest->quote_generator->lock);
+
+    /* Mark the buffer in-flight. */
+    hdr.error_code = cpu_to_le64(TDX_VP_GET_QUOTE_IN_FLIGHT);
+    if (address_space_write(&address_space_memory, buf_gpa,
+                            MEMTXATTRS_UNSPECIFIED,
+                            &hdr, TDX_GET_QUOTE_HDR_SIZE) != MEMTX_OK) {
+        error_report("TDX: failed to update GetQuote header.\n");
+        return -1;
+    }
+
+    task = g_malloc(sizeof(*task));
+    task->buf_gpa = buf_gpa;
+    task->payload_gpa = buf_gpa + TDX_GET_QUOTE_HDR_SIZE;
+    task->payload_len = buf_len - TDX_GET_QUOTE_HDR_SIZE;
+    task->hdr = hdr;
+    task->quote_gen = tdx_guest->quote_generator;
+    task->completion = tdx_get_quote_completion;
+
+    task->send_data_size = le32_to_cpu(hdr.in_len);
+    task->send_data = g_malloc(task->send_data_size);
+    task->send_data_sent = 0;
+
+    if (address_space_read(&address_space_memory, task->payload_gpa,
+                           MEMTXATTRS_UNSPECIFIED, task->send_data,
+                           task->send_data_size) != MEMTX_OK) {
+        g_free(task->send_data);
+        return -1;
+    }
+
+    task->receive_buf = g_malloc0(task->payload_len);
+    task->receive_buf_received = 0;
+
+    tdx_generate_quote(task);
+
+    return 0;
+}
+
 static int tdx_handle_setup_event_notify_interrupt(X86CPU *cpu,
                                                    struct kvm_tdx_vmcall *vmcall)
 {
@@ -557,6 +732,8 @@ static int tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     }
 
     switch (vmcall->subfunction) {
+    case TDG_VP_VMCALL_GET_QUOTE:
+        return tdx_handle_get_quote(cpu, vmcall);
     case TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT:
         return tdx_handle_setup_event_notify_interrupt(cpu, vmcall);
     default:
@@ -640,6 +817,40 @@ static void tdx_guest_set_mrownerconfig(Object *obj, const char *value, Error **
     tdx->mrownerconfig = g_strdup(value);
 }
 
+static void tdx_guest_get_quote_generation(Object *obj, Visitor *v,
+                                            const char *name, void *opaque,
+                                            Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    visit_type_SocketAddress(v, name, &tdx->quote_generator->socket, errp);
+}
+
+static void tdx_guest_set_quote_generation(Object *obj, Visitor *v,
+                                           const char *name, void *opaque,
+                                           Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+    SocketAddress *sock = NULL;
+    Object *qg_obj;
+    TdxQuoteGenerator *quote_generator;
+
+    if (!visit_type_SocketAddress(v, name, &sock, errp)) {
+        return;
+    }
+
+    if (tdx->quote_generator) {
+        object_unref(tdx->quote_generator);
+    }
+
+    qg_obj = object_new(TYPE_TDX_QUOTE_GENERATOR);
+    quote_generator = TDX_QUOTE_GENERATOR(qg_obj);
+    quote_generator->socket = sock;
+    qemu_mutex_init(&quote_generator->lock);
+
+    tdx->quote_generator = quote_generator;
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -669,6 +880,12 @@ static void tdx_guest_init(Object *obj)
     object_property_add_str(obj, "mrownerconfig",
                             tdx_guest_get_mrownerconfig,
                             tdx_guest_set_mrownerconfig);
+
+    tdx->quote_generator = NULL;
+    object_property_add(obj, "quote-generation-socket", "SocketAddress",
+                            tdx_guest_get_quote_generation,
+                            tdx_guest_set_quote_generation,
+                            NULL, NULL);
 
     tdx->event_notify_vector = -1;
     tdx->event_notify_apicid = -1;
