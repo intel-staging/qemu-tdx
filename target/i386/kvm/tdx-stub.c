@@ -23,3 +23,8 @@ int tdx_handle_get_quote(X86CPU *cpu, struct kvm_run *run)
 {
     return -EINVAL;
 }
+
+int tdx_handle_setup_event_notify(X86CPU *cpu, struct kvm_run *run)
+{
+    return -EINVAL;
+}

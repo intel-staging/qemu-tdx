@@ -179,6 +179,7 @@ struct kvm_xen_exit {
 #define KVM_EXIT_LOONGARCH_IOCSR  38
 #define KVM_EXIT_MEMORY_FAULT     39
 #define KVM_EXIT_TDX_GET_QUOTE          40
+#define KVM_EXIT_TDX_SETUP_EVENT_NOTIFY 41
 
 /* For KVM_EXIT_INTERNAL_ERROR */
 /* Emulate instruction failed. */
@@ -446,6 +447,11 @@ struct kvm_run {
 			__u64 gpa;
 			__u64 size;
 		} tdx_get_quote;
+		/* KVM_EXIT_TDX_SETUP_EVENT_NOTIFY */
+		struct {
+			__u64 ret;
+			__u64 vector;
+		} tdx_setup_event_notify;
 		/* Fix the size of the union. */
 		char padding[256];
 	};
