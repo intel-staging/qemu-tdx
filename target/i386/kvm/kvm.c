@@ -6149,6 +6149,9 @@ int kvm_arch_handle_exit(CPUState *cs, struct kvm_run *run)
             break;
         }
         break;
+    case KVM_EXIT_TDX_GET_QUOTE:
+        ret = tdx_handle_get_quote(cpu, run);
+        break;
     default:
         fprintf(stderr, "KVM: unknown exit reason %d\n", run->exit_reason);
         ret = -1;
