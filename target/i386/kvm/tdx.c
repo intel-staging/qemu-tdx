@@ -951,6 +951,9 @@ static void tdx_guest_init(Object *obj)
     object_property_add_str(obj, "mrownerconfig",
                             tdx_guest_get_mrownerconfig,
                             tdx_guest_set_mrownerconfig);
+
+    tdx->event_notify_interrupt = -1;
+    tdx->event_notify_apic_id = -1;
 }
 
 static void tdx_guest_finalize(Object *obj)
@@ -959,4 +962,62 @@ static void tdx_guest_finalize(Object *obj)
 
 static void tdx_guest_class_init(ObjectClass *oc, void *data)
 {
+}
+
+#define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
+
+#define TDG_VP_VMCALL_SUCCESS           0x0000000000000000ULL
+#define TDG_VP_VMCALL_RETRY             0x0000000000000001ULL
+#define TDG_VP_VMCALL_INVALID_OPERAND   0x8000000000000000ULL
+#define TDG_VP_VMCALL_GPA_INUSE         0x8000000000000001ULL
+#define TDG_VP_VMCALL_ALIGN_ERROR       0x8000000000000002ULL
+
+static void tdx_handle_setup_event_notify_interrupt(X86CPU *cpu,
+                                                    struct kvm_tdx_vmcall *vmcall)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx = TDX_GUEST(ms->cgs);
+    int event_notify_interrupt = vmcall->in_r12;
+
+    if (32 <= event_notify_interrupt && event_notify_interrupt <= 255) {
+        qemu_mutex_lock(&tdx->lock);
+        tdx->event_notify_interrupt = event_notify_interrupt;
+        tdx->event_notify_apic_id = cpu->apic_id;
+        qemu_mutex_unlock(&tdx->lock);
+        vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    }
+}
+
+static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    /* For now handle only TDG.VP.VMCALL. */
+    if (vmcall->type != 0) {
+        warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",
+                    vmcall->type, vmcall->subfunction);
+        return;
+    }
+
+    switch (vmcall->subfunction) {
+    case TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT:
+        tdx_handle_setup_event_notify_interrupt(cpu, vmcall);
+        break;
+    default:
+        warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",
+                    vmcall->type, vmcall->subfunction);
+        break;
+    }
+}
+
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
+    switch (tdx_exit->type) {
+    case KVM_EXIT_TDX_VMCALL:
+        tdx_handle_vmcall(cpu, &tdx_exit->u.vmcall);
+        break;
+    default:
+        warn_report("unknown tdx exit type 0x%x", tdx_exit->type);
+        break;
+    }
 }
