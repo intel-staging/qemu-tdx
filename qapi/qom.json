@@ -917,13 +917,19 @@
 #     (base64 encoded SHA384 digest). (A default value 0 of SHA384 is
 #     used when absent).
 #
+# @quote-generation-socket: socket address for Quote Generation
+#     Service (QGS).  QGS is a daemon running on the host.  User in
+#     TD guest cannot get TD quoting for attestation if QGS is not
+#     provided.  So admin should always provide it.
+#
 # Since: 9.0
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*sept-ve-disable': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
-            '*mrownerconfig': 'str' } }
+            '*mrownerconfig': 'str',
+            '*quote-generation-socket': 'SocketAddress' } }
 
 ##
 # @ThreadContextProperties:
