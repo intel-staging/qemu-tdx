@@ -5,8 +5,10 @@
 #include CONFIG_DEVICES /* CONFIG_TDX */
 #endif
 
+#include <linux/kvm.h>
 #include "exec/confidential-guest-support.h"
 #include "hw/i386/tdvf.h"
+#include "io/channel-socket.h"
 #include "sysemu/kvm.h"
 
 #define TYPE_TDX_GUEST "tdx-guest"
@@ -47,6 +49,10 @@ typedef struct TdxGuest {
     /* runtime state */
     int event_notify_interrupt;
     uint32_t event_notify_apic_id;
+
+    /* GetQuote */
+    int quote_generation_num;
+    SocketAddress *quote_generation;
 } TdxGuest;
 
 #ifdef CONFIG_TDX
