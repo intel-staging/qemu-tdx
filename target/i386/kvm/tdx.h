@@ -5,8 +5,11 @@
 #include CONFIG_DEVICES /* CONFIG_TDX */
 #endif
 
+#include <linux/kvm.h>
 #include "exec/confidential-guest-support.h"
 #include "hw/i386/tdvf.h"
+#include "io/channel-socket.h"
+#include "sysemu/kvm.h"
 
 #define TYPE_TDX_GUEST "tdx-guest"
 #define TDX_GUEST(obj)  OBJECT_CHECK(TdxGuest, (obj), TYPE_TDX_GUEST)
@@ -45,6 +48,11 @@ typedef struct TdxGuest {
 
     /* runtime state */
     int event_notify_interrupt;
+
+    /* GetQuote */
+    int quote_generation_num;
+    char *quote_generation_str;
+    SocketAddress *quote_generation;
 } TdxGuest;
 
 #ifdef CONFIG_TDX
