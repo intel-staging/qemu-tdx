@@ -31,10 +31,10 @@
 #include "qemu/memfd.h"
 #include "qemu/host-utils.h"
 
-#if defined CONFIG_LINUX && !defined CONFIG_MEMFD
 #include <sys/syscall.h>
 #include <asm/unistd.h>
 
+#if defined CONFIG_LINUX && !defined CONFIG_MEMFD
 int memfd_create(const char *name, unsigned int flags)
 {
 #ifdef __NR_memfd_create
@@ -45,6 +45,43 @@ int memfd_create(const char *name, unsigned int flags)
 #endif
 }
 #endif
+
+#if defined CONFIG_LINUX && !defined CONFIG_MEMFD_RESTRICTED
+int memfd_restricted(unsigned int flags)
+{
+#ifdef __NR_memfd_restricted
+    return syscall(__NR_memfd_restricted, flags);
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+#endif
+
+int qemu_memfd_restricted(size_t size, unsigned int flags, Error **errp)
+{
+#ifdef CONFIG_LINUX
+    int mfd = -1;
+
+    mfd = memfd_restricted(flags);
+    if (mfd < 0) {
+        error_setg_errno(errp, errno,
+                         "failed to create memfd with flags 0x%x", flags);
+        return -1;
+    }
+
+    if (ftruncate(mfd, size) == -1) {
+        error_setg_errno(errp, errno, "failed to resize memfd to %zu", size);
+	close(mfd);
+        return -1;
+    }
+
+    return mfd;
+#else
+    error_setg_errno(errp, ENOSYS, "failed to create memfd");
+#endif
+    return -1;
+}
 
 int qemu_memfd_create(const char *name, size_t size, bool hugetlb,
                       uint64_t hugetlbsize, unsigned int seals, Error **errp)

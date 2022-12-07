@@ -36,8 +36,14 @@
 int memfd_create(const char *name, unsigned int flags);
 #endif
 
+#if defined CONFIG_LINUX && !defined CONFIG_MEMFD_RESTRICTED
+int memfd_restricted(unsigned int flags);
+#endif
+
 int qemu_memfd_create(const char *name, size_t size, bool hugetlb,
                       uint64_t hugetlbsize, unsigned int seals, Error **errp);
+int qemu_memfd_restricted(size_t size, unsigned int flags, Error **errp);
+
 bool qemu_memfd_alloc_check(void);
 void *qemu_memfd_alloc(const char *name, size_t size, unsigned int seals,
                        int *fd, Error **errp);
