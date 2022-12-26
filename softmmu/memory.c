@@ -21,6 +21,7 @@
 #include "qemu/bitops.h"
 #include "qemu/error-report.h"
 #include "qemu/main-loop.h"
+#include "qemu/memfd.h"
 #include "qemu/qemu-print.h"
 #include "qom/object.h"
 #include "trace.h"
@@ -1547,6 +1548,7 @@ void memory_region_init_ram_nomigrate(MemoryRegion *mr,
                                       Error **errp)
 {
     memory_region_init_ram_flags_nomigrate(mr, owner, name, size, 0, errp);
+
 }
 
 void memory_region_init_ram_flags_nomigrate(MemoryRegion *mr,
@@ -3559,6 +3561,40 @@ void memory_region_init_ram(MemoryRegion *mr,
         error_propagate(errp, err);
         return;
     }
+    /* This will assert if owner is neither NULL nor a DeviceState.
+     * We only want the owner here for the purposes of defining a
+     * unique name for migration. TODO: Ideally we should implement
+     * a naming scheme for Objects which are not DeviceStates, in
+     * which case we can relax this restriction.
+     */
+    owner_dev = DEVICE(owner);
+    vmstate_register_ram(mr, owner_dev);
+}
+
+void memory_region_init_ram_restricted(MemoryRegion *mr,
+                                       Object *owner,
+                                       const char *name,
+                                       uint64_t size,
+                                       Error **errp)
+{
+    DeviceState *owner_dev;
+    Error *err = NULL;
+    int priv_fd;
+
+    memory_region_init_ram_nomigrate(mr, owner, name, size, &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+
+    priv_fd = qemu_memfd_restricted(size, 0, errp);
+    if (priv_fd == -1) {
+        error_report("Failed to allocate restricted memfd");
+        return;
+    }
+
+    memory_region_set_restricted_fd(mr, priv_fd);
+
     /* This will assert if owner is neither NULL nor a DeviceState.
      * We only want the owner here for the purposes of defining a
      * unique name for migration. TODO: Ideally we should implement
