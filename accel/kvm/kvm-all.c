@@ -32,6 +32,7 @@
 #include "sysemu/runstate.h"
 #include "sysemu/cpus.h"
 #include "sysemu/accel-blocker.h"
+#include "sysemu/hostmem-memfd-private.h"
 #include "qemu/bswap.h"
 #include "exec/memory.h"
 #include "exec/ram_addr.h"
@@ -2958,11 +2959,21 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     }
 
     if (memory_region_can_be_private(section.mr)) {
+        HostMemoryBackendPrivateMemfd *priv_memfd = MEMORY_BACKEND_MEMFD_PRIVATE(section.mr->owner);
         ret = kvm_encrypt_reg_region(start, size, shared_to_private);
-    
+        if (ret) {
+            goto exit;
+        }
+
         addr = memory_region_get_ram_ptr(section.mr) +
                section.offset_within_region;
         rb = qemu_ram_block_from_host(addr, false, &offset);
+
+        ret = priv_memfd_backend_state_change(priv_memfd, offset, size, !shared_to_private);
+        if (ret) {
+            goto exit;
+        }
+
         /*
          * With KVM_MEMORY_(UN)ENCRYPT_REG_REGION by kvm_encrypt_reg_region(),
          * operation on underlying file descriptor is only for releasing
@@ -2990,6 +3001,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
 
     }
 
+exit:
     memory_region_unref(section.mr);
     return ret;
 }
