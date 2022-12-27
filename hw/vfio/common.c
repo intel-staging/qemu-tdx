@@ -834,10 +834,15 @@ static void vfio_register_ram_discard_listener(VFIOContainer *container,
             vrdl_count++;
         }
 
+        /*
+         * RamDiscardManager interface is used in virtio-mem and private memfd backend.
+         * Private memfd has the 4K block_size due to current usage scenario.
+         * TODO: remove this warning or increase the container->dma_max_mappings by
+         * echo N > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+         */
         if (vrdl_mappings + max_memslots - vrdl_count >
             container->dma_max_mappings) {
-            warn_report("%s: possibly running out of DMA mappings. E.g., try"
-                        " increasing the 'block-size' of virtio-mem devies."
+            warn_report("%s: possibly running out of DMA mappings."
                         " Maximum possible DMA mappings: %d, Maximum possible"
                         " memslots: %d", __func__, container->dma_max_mappings,
                         max_memslots);
