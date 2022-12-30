@@ -1666,6 +1666,16 @@ static inline bool memory_region_is_romd(MemoryRegion *mr)
 bool memory_region_is_protected(MemoryRegion *mr);
 
 /**
+ * memory_region_can_be_private: check whether a memory region has
+ * restricted memfd
+ *
+ * Returns %true if a memory region's ram_block has restricted_fd assigned.
+ *
+ * @mr: the memory region being queried
+ */
+bool memory_region_can_be_private(MemoryRegion *mr);
+
+/**
  * memory_region_get_iommu: check whether a memory region is an iommu
  *
  * Returns pointer to IOMMUMemoryRegion if a memory region is an iommu,
