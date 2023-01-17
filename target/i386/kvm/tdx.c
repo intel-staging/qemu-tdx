@@ -573,6 +573,30 @@ int tdx_parse_tdvf(void *flash_ptr, int size)
     return tdvf_parse_metadata(&tdx_guest->tdvf, flash_ptr, size);
 }
 
+int tdx_handle_report_fatal_error(X86CPU *cpu, struct kvm_run *run)
+{
+    uint64_t error_code = run->system_event.data[0];
+    char *message = NULL;
+
+    if (error_code & 0xffff) {
+        error_report("TDX: REPORT_FATAL_ERROR: invalid error code: "
+                     "0x%lx\n", error_code);
+        return -1;
+    }
+
+    /* It has optional message */
+    if (run->system_event.data[2]) {
+#define GUEST_PANIC_INFO_TDX_MESSAGE_MAX        64
+        message = g_malloc0(GUEST_PANIC_INFO_TDX_MESSAGE_MAX + 1);
+
+        memcpy(message, &run->system_event.data[2], GUEST_PANIC_INFO_TDX_MESSAGE_MAX);
+        message[GUEST_PANIC_INFO_TDX_MESSAGE_MAX] = '\0';
+    }
+
+    error_report("TD guest reports fatal error. %s\n", message ? : "");
+    return -1;
+}
+
 static bool tdx_guest_get_sept_ve_disable(Object *obj, Error **errp)
 {
     TdxGuest *tdx = TDX_GUEST(obj);
