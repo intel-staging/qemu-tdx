@@ -511,7 +511,56 @@ void qemu_system_guest_panicked(GuestPanicInformation *info)
                           S390CrashReason_str(info->u.s390.reason),
                           info->u.s390.psw_mask,
                           info->u.s390.psw_addr);
+        } else if (info->type == GUEST_PANIC_INFORMATION_TYPE_TDX) {
+            char *buf = NULL;
+            bool printable = false;
+
+            /*
+             * Although message is defined as a json string, we shouldn't
+             * unconditionally treat it as is because the guest generated it and
+             * it's not necessarily trustable.
+             */
+            if (info->u.tdx.message) {
+                /* The caller guarantees the NUL-terminated string. */
+                int len = strlen(info->u.tdx.message);
+                int i;
+
+                printable = len > 0;
+                for (i = 0; i < len; i++) {
+                    if (!(0x20 <= info->u.tdx.message[i] &&
+                          info->u.tdx.message[i] <= 0x7e)) {
+                        printable = false;
+                        break;
+                    }
+                }
+
+                /* 3 = length of "%02x " */
+                buf = g_malloc(len * 3);
+                for (i = 0; i < len; i++) {
+                    if (info->u.tdx.message[i] == '\0') {
+                        break;
+                    } else {
+                        sprintf(buf + 3 * i, "%02x ", info->u.tdx.message[i]);
+                    }
+                }
+                if (i > 0)
+                    /* replace the last ' '(space) to NUL */
+                    buf[i * 3 - 1] = '\0';
+                else
+                    buf[0] = '\0';
+            }
+
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          //" TDX report fatal error:\"%s\" %s",
+                          " TDX report fatal error:\"%s\""
+                          "error: 0x%016" PRIx64 " gpa page: 0x%016" PRIx64 "\n",
+                          printable ? info->u.tdx.message : "",
+                          //buf ? buf : "",
+                          info->u.tdx.error_code,
+                          info->u.tdx.gpa);
+            g_free(buf);
         }
+
         qapi_free_GuestPanicInformation(info);
     }
 }

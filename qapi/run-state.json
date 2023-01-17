@@ -485,7 +485,7 @@
 # Since: 2.9
 ##
 { 'enum': 'GuestPanicInformationType',
-  'data': [ 'hyper-v', 's390' ] }
+  'data': [ 'hyper-v', 's390', 'tdx' ] }
 
 ##
 # @GuestPanicInformation:
@@ -500,7 +500,8 @@
  'base': {'type': 'GuestPanicInformationType'},
  'discriminator': 'type',
  'data': { 'hyper-v': 'GuestPanicInformationHyperV',
-           's390': 'GuestPanicInformationS390' } }
+           's390': 'GuestPanicInformationS390',
+           'tdx' : 'GuestPanicInformationTdx' } }
 
 ##
 # @GuestPanicInformationHyperV:
@@ -559,6 +560,18 @@
            'psw-mask': 'uint64',
            'psw-addr': 'uint64',
            'reason': 'S390CrashReason' } }
+
+##
+# @GuestPanicInformationTdx:
+#
+# TDX GHCI TDG.VP.VMCALL<ReportFatalError> specific guest panic information
+#
+# Since: 7.3
+##
+{'struct': 'GuestPanicInformationTdx',
+ 'data': { 'error-code': 'uint64',
+           'gpa': 'uint64',
+           'message': 'str'} }
 
 ##
 # @MEMORY_FAILURE:
