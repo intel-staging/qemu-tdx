@@ -485,10 +485,12 @@
 #
 # @s390: s390 guest panic information type (Since: 2.12)
 #
+# @tdx: tdx guest panic information type (Since: 8.2)
+#
 # Since: 2.9
 ##
 { 'enum': 'GuestPanicInformationType',
-  'data': [ 'hyper-v', 's390' ] }
+  'data': [ 'hyper-v', 's390', 'tdx' ] }
 
 ##
 # @GuestPanicInformation:
@@ -503,7 +505,8 @@
  'base': {'type': 'GuestPanicInformationType'},
  'discriminator': 'type',
  'data': {'hyper-v': 'GuestPanicInformationHyperV',
-          's390': 'GuestPanicInformationS390'}}
+          's390': 'GuestPanicInformationS390',
+          'tdx' : 'GuestPanicInformationTdx'}}
 
 ##
 # @GuestPanicInformationHyperV:
@@ -565,6 +568,27 @@
           'psw-mask': 'uint64',
           'psw-addr': 'uint64',
           'reason': 'S390CrashReason'}}
+
+##
+# @GuestPanicInformationTdx:
+#
+# TDX Guest panic information specific to TDX GCHI
+# TDG.VP.VMCALL<ReportFatalError>.
+#
+# @error-code: TD-specific error code
+#
+# @gpa: guest-physical address of a page that contains additional
+#     error data, in forms of zero-terminated string.
+#
+# @message: Human-readable error message provided by the guest. Not
+#     to be trusted.
+#
+# Since: 9.0
+##
+{'struct': 'GuestPanicInformationTdx',
+ 'data': {'error-code': 'uint64',
+          'gpa': 'uint64',
+          'message': 'str'}}
 
 ##
 # @MEMORY_FAILURE:
