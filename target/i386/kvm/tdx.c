@@ -1062,7 +1062,11 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     MachineState *ms = MACHINE(qdev_get_machine());
     X86CPU *x86cpu = X86_CPU(cpu);
     CPUX86State *env = &x86cpu->env;
-    struct kvm_tdx_init_vm init_vm;
+    union {
+        struct kvm_tdx_init_vm init_vm;
+        struct kvm_tdx_init_vm_old compat;
+        uint8_t data[16 * 1024];
+    } init_vm;
     int r = 0;
 
     qemu_mutex_lock(&tdx_guest->lock);
@@ -1103,18 +1107,33 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     }
 
     memset(&init_vm, 0, sizeof(init_vm));
-    init_vm.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.entries, 0);
+    init_vm.init_vm.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.init_vm.cpuid.entries, 0);
 
-    init_vm.attributes = tdx_guest->attributes;
+    init_vm.init_vm.attributes = tdx_guest->attributes;
 
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrconfigid) != sizeof(tdx_guest->mrconfigid));
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrowner) != sizeof(tdx_guest->mrowner));
-    QEMU_BUILD_BUG_ON(sizeof(init_vm.mrownerconfig) != sizeof(tdx_guest->mrownerconfig));
-    memcpy(init_vm.mrconfigid, tdx_guest->mrconfigid, sizeof(init_vm.mrconfigid));
-    memcpy(init_vm.mrowner, tdx_guest->mrowner, sizeof(init_vm.mrowner));
-    memcpy(init_vm.mrownerconfig, tdx_guest->mrownerconfig, sizeof(init_vm.mrownerconfig));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrconfigid) != sizeof(tdx_guest->mrconfigid));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrowner) != sizeof(tdx_guest->mrowner));
+    QEMU_BUILD_BUG_ON(sizeof(init_vm.init_vm.mrownerconfig) != sizeof(tdx_guest->mrownerconfig));
+    memcpy(init_vm.init_vm.mrconfigid, tdx_guest->mrconfigid, sizeof(init_vm.init_vm.mrconfigid));
+    memcpy(init_vm.init_vm.mrowner, tdx_guest->mrowner, sizeof(init_vm.init_vm.mrowner));
+    memcpy(init_vm.init_vm.mrownerconfig, tdx_guest->mrownerconfig, sizeof(init_vm.init_vm.mrownerconfig));
 
     r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
+    if (r < 0) {
+        /* try old struct kvm_tdx_init_vm. */
+        memset(&init_vm, 0, sizeof(init_vm));
+        init_vm.compat.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.compat.cpuid.entries, 0);
+
+        init_vm.compat.attributes = tdx_guest->attributes;
+
+        QEMU_BUILD_BUG_ON(sizeof(init_vm.compat.mrconfigid) != sizeof(tdx_guest->mrconfigid));
+        QEMU_BUILD_BUG_ON(sizeof(init_vm.compat.mrowner) != sizeof(tdx_guest->mrowner));
+        QEMU_BUILD_BUG_ON(sizeof(init_vm.compat.mrownerconfig) != sizeof(tdx_guest->mrownerconfig));
+        memcpy(init_vm.compat.mrconfigid, tdx_guest->mrconfigid, sizeof(init_vm.compat.mrconfigid));
+        memcpy(init_vm.compat.mrowner, tdx_guest->mrowner, sizeof(init_vm.compat.mrowner));
+        memcpy(init_vm.compat.mrownerconfig, tdx_guest->mrownerconfig, sizeof(init_vm.compat.mrownerconfig));
+        r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
+    }
     if (r < 0) {
         error_report("KVM_TDX_INIT_VM failed %s", strerror(-r));
         goto out;
