@@ -463,7 +463,10 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     MachineState *ms = MACHINE(qdev_get_machine());
     X86CPU *x86cpu = X86_CPU(cpu);
     CPUX86State *env = &x86cpu->env;
-    struct kvm_tdx_init_vm init_vm;
+    union {
+        struct kvm_tdx_init_vm init_vm;
+        uint8_t data[16 * 1024];
+    } init_vm;
     int r = 0;
 
     qemu_mutex_lock(&tdx_guest->lock);
@@ -478,9 +481,9 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     }
 
     memset(&init_vm, 0, sizeof(init_vm));
-    init_vm.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.cpuid.entries, 0);
+    init_vm.init_vm.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.init_vm.cpuid.entries, 0);
 
-    init_vm.attributes = tdx_guest->attributes;
+    init_vm.init_vm.attributes = tdx_guest->attributes;
 
     do {
         r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
