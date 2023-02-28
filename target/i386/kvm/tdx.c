@@ -173,6 +173,11 @@ bool is_tdx_vm(void)
     return !!tdx_guest;
 }
 
+bool is_tdx_vm_finalized(void)
+{
+    return !!tdx_guest && tdx_guest->parent_obj.ready;
+}
+
 static inline uint32_t host_cpuid_reg(uint32_t function,
                                       uint32_t index, int reg)
 {
@@ -582,10 +587,20 @@ static void tdx_post_init_vcpus(void)
     TdxFirmwareEntry *hob;
     CPUState *cpu;
     int r;
+    uint64_t apic_base;
 
     hob = tdx_get_hob_entry(tdx_guest);
     CPU_FOREACH(cpu) {
-        apic_force_x2apic(X86_CPU(cpu)->apic_state);
+        X86CPU *x86_cpu = X86_CPU(cpu);
+
+        apic_force_x2apic(x86_cpu->apic_state);
+
+        apic_base = APIC_DEFAULT_ADDRESS | MSR_IA32_APICBASE_ENABLE |
+            MSR_IA32_APICBASE_EXTD;
+        if (cpu_is_bsp(x86_cpu))
+            apic_base |= MSR_IA32_APICBASE_BSP;
+        cpu_set_apic_base(x86_cpu->apic_state, apic_base);
+        kvm_put_apicbase(x86_cpu, apic_base);
 
         r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
         if (r < 0) {

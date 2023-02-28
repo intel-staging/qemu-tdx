@@ -43,8 +43,10 @@ typedef struct TdxGuest {
 
 #ifdef CONFIG_TDX
 bool is_tdx_vm(void);
+bool is_tdx_vm_finalized(void);
 #else
 #define is_tdx_vm() 0
+#define is_tdx_vm_finalized() false;
 #endif /* CONFIG_TDX */
 
 int tdx_kvm_init(MachineState *ms, Error **errp);

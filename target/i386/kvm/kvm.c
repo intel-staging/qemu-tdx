@@ -3143,7 +3143,7 @@ void kvm_put_apicbase(X86CPU *cpu, uint64_t value)
     int ret;
 
     /* TODO: Allow accessing guest state for debug TDs. */
-    if (is_tdx_vm()) {
+    if (is_tdx_vm() && is_tdx_vm_finalized()) {
         return;
     }
 
