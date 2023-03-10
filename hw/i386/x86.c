@@ -1382,7 +1382,7 @@ static void machine_set_sgx_epc(Object *obj, Visitor *v, const char *name,
     qapi_free_SgxEPCList(list);
 }
 
-static int x86_kvm_type(MachineState *ms, const char *vm_type)
+int x86_kvm_type(MachineState *ms, const char *vm_type)
 {
     return kvm_get_vm_type(ms, vm_type);
 }
