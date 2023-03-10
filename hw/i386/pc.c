@@ -1876,7 +1876,7 @@ int pc_machine_kvm_type(MachineState *machine, const char *kvm_type)
         xen_xenstore_create();
     }
 #endif
-    return 0;
+    return x86_kvm_type(machine, kvm_type);
 }
 
 static void pc_machine_reset(MachineState *machine, ShutdownCause reason)
