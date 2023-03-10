@@ -125,6 +125,7 @@ void x86_load_linux(X86MachineState *x86ms,
 
 bool x86_machine_is_smm_enabled(const X86MachineState *x86ms);
 bool x86_machine_is_acpi_enabled(const X86MachineState *x86ms);
+int x86_kvm_type(MachineState *ms, const char *vm_type);
 
 /* Global System Interrupts */
 
