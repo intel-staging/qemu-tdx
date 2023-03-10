@@ -3091,17 +3091,19 @@ static int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 {
     MemoryRegionSection section;
     ram_addr_t offset;
+    MemoryRegion *mr;
     RAMBlock *rb;
     void *addr;
     int ret = -1;
 
     trace_kvm_convert_memory(start, size, to_private ? "shared_to_private" : "private_to_shared");
     section = memory_region_find(get_system_memory(), start, size);
-    if (!section.mr) {
+    mr = section.mr;
+    if (!mr) {
         return ret;
     }
 
-    if (memory_region_has_gmem_fd(section.mr)) {
+    if (memory_region_has_gmem_fd(mr)) {
         if (to_private) {
             ret = kvm_set_memory_attributes_private(start, size);
         } else {
@@ -3123,9 +3125,22 @@ static int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
          */
         ram_block_convert_range(rb, offset, size, to_private);
     } else {
-        warn_report("Convert non guest-memfd backed memory region "
-                    "(0x%"HWADDR_PRIx" ,+ 0x%"HWADDR_PRIx") to %s",
-                    start, size, to_private ? "private" : "shared");
+        /*
+         * Because vMMIO region must be shared, guest TD may convert vMMIO
+         * region to shared explicitly.  Don't complain such case.  See
+         * memory_region_type() for checking if the region is MMIO region.
+         */
+        if (!to_private &&
+            !memory_region_is_ram(mr) &&
+            !memory_region_is_ram_device(mr) &&
+            !memory_region_is_rom(mr) &&
+            !memory_region_is_romd(mr)) {
+		    ret = 0;
+	    } else {
+            warn_report("Convert non guest-memfd backed memory region "
+                        "(0x%"HWADDR_PRIx" ,+ 0x%"HWADDR_PRIx") to %s",
+                        start, size, to_private ? "private" : "shared");
+        }
     }
 
     memory_region_unref(section.mr);
