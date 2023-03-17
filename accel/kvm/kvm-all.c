@@ -2950,6 +2950,18 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
     trace_kvm_convert_memory(start, size, shared_to_private ? "shared_to_private" : "private_to_shared");
     section = memory_region_find(get_system_memory(), start, size);
     if (!section.mr) {
+        /*
+         * Ignore converting non-assigned region to shared.
+         *
+         * TDX requires vMMIO region to be shared to inject #VE to guest.
+         * OVMF issues conservatively MapGPA(shared) on 32bit PCI MMIO region,
+         * and vIO-APIC 0xFEC00000 4K page.
+         * OVMF assigns 32bit PCI MMIO region to
+         * [top of low memory: typically 2GB=0xC000000,  0xFC00000)
+         */
+        if (!shared_to_private) {
+            ret = 0;
+        }
         return ret;
     }
 
