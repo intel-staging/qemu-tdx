@@ -313,7 +313,8 @@ static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, boo
 err:
     trace_kvm_set_user_memory(mem.slot >> 16, (uint16_t)mem.slot, mem.flags,
                               mem.guest_phys_addr, mem.memory_size,
-                              mem.userspace_addr, ret);
+                              mem.userspace_addr, mem.restricted_fd,
+			      mem.restricted_offset, ret);
     if (ret < 0) {
         error_report("%s: KVM_SET_USER_MEMORY_REGION2 failed, slot=%d,"
                      " start=0x%" PRIx64 ", size=0x%" PRIx64 ","
