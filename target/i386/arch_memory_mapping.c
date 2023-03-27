@@ -14,6 +14,8 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "sysemu/memory_mapping.h"
+#include "sysemu/kvm.h"
+#include "sysemu/tdx.h"
 
 /* PAE Paging or IA-32e Paging */
 static void walk_pte(MemoryMappingList *list, AddressSpace *as,
@@ -27,13 +29,14 @@ static void walk_pte(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 512; i++) {
         pte_addr = (pte_start_addr + i * 8) & a20_mask;
-        pte = address_space_ldq(as, pte_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pte = x86_ldq_phys_as_debug(as, pte_addr);
         if (!(pte & PG_PRESENT_MASK)) {
             /* not present */
             continue;
         }
 
         start_paddr = (pte & ~0xfff) & ~(0x1ULL << 63);
+        start_paddr = kvm_encrypted_guest_mask_gpa_stolen_bit(start_paddr);
         if (cpu_physical_memory_is_io(start_paddr)) {
             /* I/O region */
             continue;
@@ -57,13 +60,14 @@ static void walk_pte2(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 1024; i++) {
         pte_addr = (pte_start_addr + i * 4) & a20_mask;
-        pte = address_space_ldl(as, pte_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pte = x86_ldl_phys_as_debug(as, pte_addr);
         if (!(pte & PG_PRESENT_MASK)) {
             /* not present */
             continue;
         }
 
         start_paddr = pte & ~0xfff;
+        start_paddr = kvm_encrypted_guest_mask_gpa_stolen_bit(start_paddr);
         if (cpu_physical_memory_is_io(start_paddr)) {
             /* I/O region */
             continue;
@@ -89,7 +93,7 @@ static void walk_pde(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 512; i++) {
         pde_addr = (pde_start_addr + i * 8) & a20_mask;
-        pde = address_space_ldq(as, pde_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pde = x86_ldq_phys_as_debug(as, pde_addr);
         if (!(pde & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -99,6 +103,7 @@ static void walk_pde(MemoryMappingList *list, AddressSpace *as,
         if (pde & PG_PSE_MASK) {
             /* 2 MB page */
             start_paddr = (pde & ~0x1fffff) & ~(0x1ULL << 63);
+            start_paddr = kvm_encrypted_guest_mask_gpa_stolen_bit(start_paddr);
             if (cpu_physical_memory_is_io(start_paddr)) {
                 /* I/O region */
                 continue;
@@ -126,7 +131,7 @@ static void walk_pde2(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 1024; i++) {
         pde_addr = (pde_start_addr + i * 4) & a20_mask;
-        pde = address_space_ldl(as, pde_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pde = x86_ldl_phys_as_debug(as, pde_addr);
         if (!(pde & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -141,6 +146,7 @@ static void walk_pde2(MemoryMappingList *list, AddressSpace *as,
              */
             high_paddr = ((hwaddr)(pde & 0x1fe000) << 19);
             start_paddr = (pde & ~0x3fffff) | high_paddr;
+            start_paddr = kvm_encrypted_guest_mask_gpa_stolen_bit(start_paddr);
             if (cpu_physical_memory_is_io(start_paddr)) {
                 /* I/O region */
                 continue;
@@ -167,7 +173,7 @@ static void walk_pdpe2(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 4; i++) {
         pdpe_addr = (pdpe_start_addr + i * 8) & a20_mask;
-        pdpe = address_space_ldq(as, pdpe_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pdpe = x86_ldq_phys_as_debug(as, pdpe_addr);
         if (!(pdpe & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -192,7 +198,7 @@ static void walk_pdpe(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 512; i++) {
         pdpe_addr = (pdpe_start_addr + i * 8) & a20_mask;
-        pdpe = address_space_ldq(as, pdpe_addr, MEMTXATTRS_UNSPECIFIED, NULL);
+        pdpe = x86_ldq_phys_as_debug(as, pdpe_addr);
         if (!(pdpe & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -202,6 +208,7 @@ static void walk_pdpe(MemoryMappingList *list, AddressSpace *as,
         if (pdpe & PG_PSE_MASK) {
             /* 1 GB page */
             start_paddr = (pdpe & ~0x3fffffff) & ~(0x1ULL << 63);
+            start_paddr = kvm_encrypted_guest_mask_gpa_stolen_bit(start_paddr);
             if (cpu_physical_memory_is_io(start_paddr)) {
                 /* I/O region */
                 continue;
@@ -229,8 +236,7 @@ static void walk_pml4e(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 512; i++) {
         pml4e_addr = (pml4e_start_addr + i * 8) & a20_mask;
-        pml4e = address_space_ldq(as, pml4e_addr, MEMTXATTRS_UNSPECIFIED,
-                                  NULL);
+        pml4e = x86_ldq_phys_as_debug(as, pml4e_addr);
         if (!(pml4e & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -252,8 +258,7 @@ static void walk_pml5e(MemoryMappingList *list, AddressSpace *as,
 
     for (i = 0; i < 512; i++) {
         pml5e_addr = (pml5e_start_addr + i * 8) & a20_mask;
-        pml5e = address_space_ldq(as, pml5e_addr, MEMTXATTRS_UNSPECIFIED,
-                                  NULL);
+        pml5e = x86_ldq_phys_as_debug(as, pml5e_addr);
         if (!(pml5e & PG_PRESENT_MASK)) {
             /* not present */
             continue;
@@ -311,4 +316,3 @@ void x86_cpu_get_memory_mapping(CPUState *cs, MemoryMappingList *list,
         walk_pde2(list, cs->as, pde_addr, a20_mask, pse);
     }
 }
-
