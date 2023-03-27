@@ -2684,6 +2684,12 @@ MemTxResult address_space_write_rom(AddressSpace *as, hwaddr addr,
                                     MemTxAttrs attrs,
                                     const void *buf, hwaddr len);
 
+MemTxResult address_space_write_rom_debug(AddressSpace *as,
+                                          hwaddr addr,
+                                          MemTxAttrs attrs,
+                                          const void *ptr,
+                                          hwaddr len);
+
 /* address_space_ld*: load from an address space
  * address_space_st*: store to an address space
  *
@@ -2954,6 +2960,8 @@ void address_space_set_debug_ops(const MemoryDebugOps *ops);
 extern const MemoryDebugOps *physical_memory_debug_ops;
 
 
+void set_encrypted_memory_debug_ops(void);
+
 static inline bool memory_access_is_direct(MemoryRegion *mr, bool is_write)
 {
     if (is_write) {
@@ -3008,6 +3016,10 @@ MemTxResult address_space_read(AddressSpace *as, hwaddr addr,
     }
     return result;
 }
+
+MemTxResult address_space_read_debug(AddressSpace *as, hwaddr addr,
+                                     MemTxAttrs attrs, void *buf,
+                                     hwaddr len);
 
 /**
  * address_space_read_cached: read from a cached RAM region
