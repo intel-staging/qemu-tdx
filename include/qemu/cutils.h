@@ -267,5 +267,4 @@ void qemu_hexdump_line(char *line, unsigned int b, const void *bufptr,
 
 void qemu_hexdump(FILE *fp, const char *prefix,
                   const void *bufptr, size_t size);
-
 #endif
