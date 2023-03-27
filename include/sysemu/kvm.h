@@ -592,4 +592,5 @@ void kvm_set_memory_region_debug_ops(void *handle, MemoryRegion *mr);
 
 void kvm_encrypted_guest_set_memory_region_debug_ops(void *handle,
                                                      MemoryRegion *mr);
+hwaddr kvm_encrypted_guest_mask_gpa_stolen_bit(hwaddr gpa);
 #endif

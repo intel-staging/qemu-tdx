@@ -72,5 +72,6 @@ int tdx_parse_tdvf(void *flash_ptr, int size);
 void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
 void tdx_apply_xfam_dependencies(CPUState *cpu);
 void tdx_check_minus_features(CPUState *cpu);
+hwaddr tdx_remove_stolen_bit(hwaddr gpa);
 
 #endif /* QEMU_I386_TDX_H */
