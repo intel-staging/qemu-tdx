@@ -29,6 +29,7 @@
 #include "exec/memory-internal.h"
 #include "exec/ram_addr.h"
 #include "sysemu/kvm.h"
+#include "sysemu/tdx.h"
 #include "sysemu/runstate.h"
 #include "sysemu/tcg.h"
 #include "qemu/accel.h"
@@ -1551,6 +1552,16 @@ void memory_region_init_ram_nomigrate(MemoryRegion *mr,
 
 }
 
+static void memory_region_init_ram_debug_ops(MemoryRegion *mr)
+{
+    if (!mr || !mr->ram)
+        return;
+
+    if (tdx_debug_enabled()) {
+        kvm_set_memory_region_debug_ops(NULL, mr);
+    }
+}
+
 void memory_region_init_ram_flags_nomigrate(MemoryRegion *mr,
                                             Object *owner,
                                             const char *name,
@@ -1569,6 +1580,8 @@ void memory_region_init_ram_flags_nomigrate(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_resizeable_ram(MemoryRegion *mr,
@@ -1593,6 +1606,8 @@ void memory_region_init_resizeable_ram(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 #ifdef CONFIG_POSIX
@@ -1620,6 +1635,8 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_ram_from_fd(MemoryRegion *mr,
@@ -1643,6 +1660,8 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
         object_unparent(OBJECT(mr));
         error_propagate(errp, err);
     }
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_set_restricted_fd(MemoryRegion *mr, int fd)
@@ -1668,6 +1687,8 @@ void memory_region_init_ram_ptr(MemoryRegion *mr,
     /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
     assert(ptr != NULL);
     mr->ram_block = qemu_ram_alloc_from_ptr(size, ptr, mr, &error_fatal);
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_ram_device_ptr(MemoryRegion *mr,
@@ -1687,6 +1708,8 @@ void memory_region_init_ram_device_ptr(MemoryRegion *mr,
     /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
     assert(ptr != NULL);
     mr->ram_block = qemu_ram_alloc_from_ptr(size, ptr, mr, &error_fatal);
+
+    memory_region_init_ram_debug_ops(mr);
 }
 
 void memory_region_init_alias(MemoryRegion *mr,
