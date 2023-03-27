@@ -132,3 +132,14 @@ uint32_t kvm_dirty_ring_size(void)
 {
     return 0;
 }
+
+void kvm_setup_set_memory_region_debug_ops(struct KVMState *s,
+                                           set_memory_region_debug_ops new_ops)
+{
+
+}
+
+void kvm_set_memory_region_debug_ops(void *handle, MemoryRegion *mr)
+{
+
+}

@@ -124,6 +124,8 @@ struct KVMState
     uint32_t xen_caps;
     uint16_t xen_gnttab_max_frames;
     uint16_t xen_evtchn_max_pirq;
+
+    set_memory_region_debug_ops set_mr_debug_ops;
 };
 
 void kvm_memory_listener_register(KVMState *s, KVMMemoryListener *kml,
