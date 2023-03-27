@@ -350,8 +350,9 @@ physical_read_memory(bfd_vma memaddr, bfd_byte *myaddr, int length,
     CPUDebug *s = container_of(info, CPUDebug, info);
     MemTxResult res;
 
-    res = address_space_read(s->cpu->as, memaddr, MEMTXATTRS_UNSPECIFIED,
-                             myaddr, length);
+    res = address_space_read_debug(s->cpu->as, memaddr,
+                                   MEMTXATTRS_UNSPECIFIED_DEBUG,
+                                   myaddr, length);
     return res == MEMTX_OK ? 0 : EIO;
 }
 
