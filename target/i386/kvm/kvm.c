@@ -30,6 +30,7 @@
 #include "sysemu/hw_accel.h"
 #include "sysemu/kvm_int.h"
 #include "sysemu/runstate.h"
+#include "sysemu/tdx.h"
 #include "kvm_i386.h"
 #include "sev.h"
 #include "tdx.h"
@@ -4899,6 +4900,38 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
     return 0;
 }
 
+static int kvm_arch_tdx_get_registers(CPUState *cs)
+{
+    X86CPU *cpu = X86_CPU(cs);
+    int ret;
+
+    if (!tdx_debug_enabled())
+        return 0;
+
+    ret = kvm_getput_regs(cpu, 0);
+    if (ret < 0) {
+        goto out;
+    }
+
+    ret = kvm_get_xcrs(cpu);
+    if (ret < 0) {
+        goto out;
+    }
+
+    ret = has_sregs2 ? kvm_get_sregs2(cpu) : kvm_get_sregs(cpu);
+    if (ret < 0) {
+        goto out;
+    }
+
+    ret = kvm_get_debugregs(cpu);
+    if (ret < 0) {
+        goto out;
+    }
+
+out:
+    return ret;
+}
+
 int kvm_arch_get_registers(CPUState *cs)
 {
     X86CPU *cpu = X86_CPU(cs);
@@ -4919,9 +4952,8 @@ int kvm_arch_get_registers(CPUState *cs)
         goto out;
     }
 
-    /* TODO: Allow accessing guest state for debug TDs. */
     if (is_tdx_vm()) {
-        return 0;
+        return kvm_arch_tdx_get_registers(cs);
     }
 
     ret = kvm_getput_regs(cpu, 0);
