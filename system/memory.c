@@ -3034,6 +3034,21 @@ void memory_global_dirty_log_stop(unsigned int flags)
     memory_global_dirty_log_do_stop(flags);
 }
 
+void memory_region_convert_mem_attr(MemoryRegionSection *section, bool shared)
+{
+    MemoryListener *listener;
+    if (!section->mr || !memory_region_has_guest_memfd(section->mr)) {
+        return;
+    }
+
+    QTAILQ_FOREACH(listener, &memory_listeners, link) {
+        if (!listener->convert_mem_attr) {
+            continue;
+        }
+        listener->convert_mem_attr(listener, section, shared);
+    }
+}
+
 static void listener_add_address_space(MemoryListener *listener,
                                        AddressSpace *as)
 {

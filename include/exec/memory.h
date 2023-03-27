@@ -1090,6 +1090,19 @@ struct MemoryListener {
      */
     void (*coalesced_io_del)(MemoryListener *listener, MemoryRegionSection *section,
                                hwaddr addr, hwaddr len);
+
+    /**
+     * @convert_mem_attr:
+     *
+     * Called during the memory attribute conversion.
+     *
+     * @listener: The #MemoryListener
+     * @section: The MemoryRegionSection
+     * @shared: convert memory attrubute from private to shared
+     */
+    void (*convert_mem_attr)(MemoryListener *listener, MemoryRegionSection *section,
+                            bool shared);
+
     /**
      * @priority:
      *
@@ -2517,6 +2530,14 @@ void memory_region_set_ram_discard_manager(MemoryRegion *mr,
  */
 MemoryRegionSection memory_region_find(MemoryRegion *mr,
                                        hwaddr addr, uint64_t size);
+
+/**
+ * memory_region_convert_mem_attr: convert the memory attribute
+ * @section: the #MemoryRegionSection to be converted
+ * @shared: if true, convert attribute from private to shared;
+ *          if false, convert from shared to private
+ */
+void memory_region_convert_mem_attr(MemoryRegionSection *section, bool shared);
 
 /**
  * memory_global_dirty_log_sync: synchronize the dirty log for all memory
