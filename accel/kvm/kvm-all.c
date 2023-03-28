@@ -2976,6 +2976,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
          * operation on underlying file descriptor is only for releasing
          * unnecessary pages.
          */
+        memory_region_convert_mem_attr(&section, !shared_to_private);
         (void)ram_block_convert_range(rb, offset, size, shared_to_private);
     } else {
         MemoryRegion *mr = section.mr;
