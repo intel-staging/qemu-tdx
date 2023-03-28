@@ -2972,6 +2972,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
         addr = memory_region_get_ram_ptr(section.mr) +
                section.offset_within_region;
         rb = qemu_ram_block_from_host(addr, false, &offset);
+        memory_region_convert_mem_attr(&section, !to_private);
         /*
          * With KVM_SET_MEMORY_ATTRIBUTES by kvm_set_memory_attributes(),
          * operation on underlying file descriptor is only for releasing
