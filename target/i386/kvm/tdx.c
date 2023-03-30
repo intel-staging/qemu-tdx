@@ -55,6 +55,44 @@
 
 #define TDX_ATTRIBUTES_MAX_BITS      64
 
+/* TDX metadata base field id. */
+#define TDX_METADATA_ATTRIBUTES_FIXED0          0x1900000300000000ULL
+#define TDX_METADATA_ATTRIBUTES_FIXED1          0x1900000300000001ULL
+#define TDX_METADATA_XFAM_FIXED0                0x1900000300000002ULL
+#define TDX_METADATA_XFAM_FIXED1                0x1900000300000003ULL
+#define TDX_METADATA_NUM_CPUID_CONFIG           0x9900000100000004ULL
+#define TDX_METADATA_CPUID_LEAVES               0x9900000300000400ULL
+#define TDX_METADATA_CPUID_VALUES               0x9900000300000500ULL
+
+#define TDX_METADATA_SYSFS_PATH "/sys/firmware/tdx/tdx_module/metadata/%" PRIx64
+
+struct tdx_cpuid_config_leaf {
+    uint32_t leaf;
+    uint32_t sub_leaf;
+} QEMU_PACKED;
+
+struct tdx_cpuid_config_value {
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+} QEMU_PACKED;
+
+struct tdx_cpuid_config {
+    struct tdx_cpuid_config_leaf leaf;
+    struct tdx_cpuid_config_value value;
+};
+
+struct tdx_capabilities {
+    uint64_t attrs_fixed0;
+    uint64_t attrs_fixed1;
+    uint64_t xfam_fixed0;
+    uint64_t xfam_fixed1;
+
+    uint16_t nr_cpuid_configs;
+    struct tdx_cpuid_config cpuid_configs[];
+};
+
 static FeatureMask tdx_attrs_ctrl_fields[TDX_ATTRIBUTES_MAX_BITS] = {
     [30] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_PKS },
     [31] = { .index = FEAT_7_0_ECX, .mask = CPUID_7_0_ECX_KeyLocker},
@@ -269,7 +307,7 @@ static KvmTdxCpuidLookup tdx_cpuid_lookup[FEATURE_WORDS] = {
 
 static TdxGuest *tdx_guest;
 
-static struct kvm_tdx_capabilities *tdx_caps;
+static struct tdx_capabilities *tdx_caps;
 
 /* It's valid after kvm_confidential_guest_init()->kvm_tdx_init() */
 bool is_tdx_vm(void)
@@ -305,7 +343,7 @@ static inline uint32_t host_cpuid_reg(uint32_t function,
 static inline uint32_t tdx_cap_cpuid_config(uint32_t function,
                                             uint32_t index, int reg)
 {
-    struct kvm_tdx_cpuid_config *cpuid_c;
+    struct tdx_cpuid_config *cpuid_c;
     int ret = 0;
     int i;
 
@@ -316,20 +354,20 @@ static inline uint32_t tdx_cap_cpuid_config(uint32_t function,
     for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
         cpuid_c = &tdx_caps->cpuid_configs[i];
         /* 0xffffffff in sub_leaf means the leaf doesn't require a sublesf */
-        if (cpuid_c->leaf == function &&
-            (cpuid_c->sub_leaf == 0xffffffff || cpuid_c->sub_leaf == index)) {
+        if (cpuid_c->leaf.leaf == function &&
+            (cpuid_c->leaf.sub_leaf == 0xffffffff || cpuid_c->leaf.sub_leaf == index)) {
             switch (reg) {
             case R_EAX:
-                ret = cpuid_c->eax;
+                ret = cpuid_c->value.eax;
                 break;
             case R_EBX:
-                ret = cpuid_c->ebx;
+                ret = cpuid_c->value.ebx;
                 break;
             case R_ECX:
-                ret = cpuid_c->ecx;
+                ret = cpuid_c->value.ecx;
                 break;
             case R_EDX:
-                ret = cpuid_c->edx;
+                ret = cpuid_c->value.edx;
                 break;
             default:
                 return 0;
@@ -627,13 +665,142 @@ static inline int tdx_vcpu_ioctl(void *vcpu_fd, int cmd_id, __u32 flags,
     return  tdx_ioctl_internal(vcpu_fd, TDX_VCPU_IOCTL, cmd_id, flags, data);
 }
 
+static int tdx_sysfs_read(uint64_t field_id, void *data, size_t count)
+{
+    int err = 0;
+    char *path;
+    int fd;
+    ssize_t r;
+
+    path = g_strdup_printf(TDX_METADATA_SYSFS_PATH, field_id);
+    fd = open(path, 0);
+    if (fd < 0) {
+        err = -errno;
+        goto out_free;
+    }
+
+    do {
+        r = read(fd, data, count);
+    } while (r == -1 && errno == EINTR);
+    if (r < 0) {
+        err = -errno;
+        goto out;
+    }
+
+    if (r != count) {
+        /* As count is small, e.g. 96, single read should serve all data. */
+        err = -EIO;
+    }
+out:
+    close(fd);
+out_free:
+    g_free(path);
+    return err;
+}
+
+static int get_tdx_capabilities_by_sysfs(void)
+{
+    int r;
+    uint16_t nr_cpuid_configs;
+    struct tdx_cpuid_config_leaf *leaves;
+    struct tdx_cpuid_config_value *values;
+    int i;
+
+    r = tdx_sysfs_read(TDX_METADATA_NUM_CPUID_CONFIG, &nr_cpuid_configs,
+                       sizeof(nr_cpuid_configs));
+    if (r < 0) {
+        return r;
+    }
+
+    tdx_caps = g_malloc(sizeof(*tdx_caps) +
+                        nr_cpuid_configs * sizeof(tdx_caps->cpuid_configs[0]));
+    leaves = g_malloc_n(nr_cpuid_configs, sizeof(*leaves));
+    values = g_malloc_n(nr_cpuid_configs, sizeof(*values));
+
+    tdx_caps->nr_cpuid_configs = nr_cpuid_configs;
+
+#define SYSFS(_field_id, member)        \
+    {                                   \
+        .field_id = _field_id,          \
+        .data = &member,                \
+        .size = sizeof(member),         \
+    }
+
+    struct {
+        uint64_t field_id;
+        void *data;
+        size_t size;
+    } sysfs[] = {
+        SYSFS(TDX_METADATA_ATTRIBUTES_FIXED0, tdx_caps->attrs_fixed0),
+        SYSFS(TDX_METADATA_ATTRIBUTES_FIXED1, tdx_caps->attrs_fixed1),
+        SYSFS(TDX_METADATA_XFAM_FIXED0, tdx_caps->xfam_fixed0),
+        SYSFS(TDX_METADATA_XFAM_FIXED0, tdx_caps->xfam_fixed0),
+        {
+            .field_id = TDX_METADATA_CPUID_LEAVES,
+            .data = leaves,
+            .size = nr_cpuid_configs * sizeof(*leaves),
+        },
+        {
+            .field_id = TDX_METADATA_CPUID_VALUES,
+            .data = values,
+            .size = nr_cpuid_configs * sizeof(*values),
+        },
+    };
+#undef SYSFS
+
+    for (i =0; i < ARRAY_SIZE(sysfs); i++) {
+        r = tdx_sysfs_read(sysfs[i].field_id, sysfs[i].data, sysfs[i].size);
+        if (r < 0) {
+            goto out;
+        }
+    }
+
+    for (i = 0; i < nr_cpuid_configs; i++) {
+        tdx_caps->cpuid_configs[i].leaf = leaves[i];
+        tdx_caps->cpuid_configs[i].value = values[i];
+    }
+
+    {
+        printf("\n=== TDX capabilities reported from sysfs ===\n");
+        printf("attrs_fixed0: 0x%lx\n", tdx_caps->attrs_fixed0);
+        printf("attrs_fixed1: 0x%lx\n", tdx_caps->attrs_fixed1);
+        printf("xfam_fixed0:  0x%lx\n", tdx_caps->xfam_fixed0);
+        printf("xfam_fixed1:  0x%lx\n", tdx_caps->xfam_fixed1);
+
+        for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+            printf("cpuid_config[%d]: 0x%8x 0x%.8x:  0x%08x  0x%08x  0x%08x  0x%08x\n",
+                    i, leaves[i].leaf, leaves[i].sub_leaf,
+                    values[i].eax, values[i].ebx,
+                    values[i].ecx, values[i].edx);
+        }
+
+        printf("\n\n");
+    }
+
+    g_free(leaves);
+    g_free(values);
+    return 0;
+
+out:
+    g_free(leaves);
+    g_free(values);
+    g_free(tdx_caps);
+    tdx_caps = NULL;
+    return r;
+}
+
 static int get_tdx_capabilities(Error **errp)
 {
     struct kvm_tdx_capabilities *caps;
     /* 1st generation of TDX reports 6 cpuid configs */
     int nr_cpuid_configs = 6;
     size_t size;
-    int r;
+    int r, i;
+
+    if (!get_tdx_capabilities_by_sysfs()) {
+        return 0;
+    }
+    warn_report("KVM TDX sysfs doesn't seem suported. fallback to the old ioctl");
 
     do {
         size = sizeof(struct kvm_tdx_capabilities) +
@@ -659,7 +826,24 @@ static int get_tdx_capabilities(Error **errp)
     }
     while (r == -E2BIG);
 
-    tdx_caps = caps;
+    tdx_caps = g_malloc(sizeof(*tdx_caps) +
+                        caps->nr_cpuid_configs * sizeof(tdx_caps->cpuid_configs[0]));
+    tdx_caps->attrs_fixed0 = caps->attrs_fixed0;
+    tdx_caps->attrs_fixed1 = caps->attrs_fixed1;
+    tdx_caps->xfam_fixed0 = caps->xfam_fixed0;
+    tdx_caps->xfam_fixed1 = caps->xfam_fixed1;
+    tdx_caps->nr_cpuid_configs = caps->nr_cpuid_configs;
+    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+        struct kvm_tdx_cpuid_config *kvm = &caps->cpuid_configs[i];
+        struct tdx_cpuid_config *dest = &tdx_caps->cpuid_configs[i];
+
+        dest->leaf.leaf = kvm->leaf;
+        dest->leaf.sub_leaf = kvm->sub_leaf;
+        dest->value.eax = kvm->eax;
+        dest->value.ebx = kvm->ebx;
+        dest->value.ecx = kvm->ecx;
+        dest->value.edx = kvm->edx;
+    }
 
     return 0;
 }
@@ -968,29 +1152,6 @@ static Notifier tdx_machine_done_notify = {
     .notify = tdx_finalize_vm,
 };
 
-
-static void print_tdx_caps(void)
-{
-    int i;
-    struct kvm_tdx_cpuid_config *cpuid_config;
-
-    printf("\n\n=== TDX capabilities reported from KVM ioctl(KVM_TDX_CAPABILITIES) ===\n");
-    printf("attrs_fixed0: 0x%llx\n", tdx_caps->attrs_fixed0);
-    printf("attrs_fixed1: 0x%llx\n", tdx_caps->attrs_fixed1);
-    printf("xfam_fixed0:  0x%llx\n", tdx_caps->xfam_fixed0);
-    printf("xfam_fixed1:  0x%llx\n", tdx_caps->xfam_fixed1);
-
-    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
-        cpuid_config = &tdx_caps->cpuid_configs[i];
-        printf("cpuid_config[%d]: 0x%8x 0x%.8x:  0x%08x  0x%08x  0x%08x  0x%08x\n",
-                i, cpuid_config->leaf, cpuid_config->sub_leaf,
-                cpuid_config->eax, cpuid_config->ebx,
-                cpuid_config->ecx, cpuid_config->edx);
-    }
-
-    printf("\n\n");
-}
-
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
     X86MachineState *x86ms = X86_MACHINE(ms);
@@ -1020,7 +1181,6 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         if (r) {
             return r;
         }
-        print_tdx_caps();
     }
 
     update_tdx_cpuid_lookup_by_tdx_caps();
@@ -1045,7 +1205,7 @@ static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
     if (((tdx->attributes & tdx_caps->attrs_fixed0) | tdx_caps->attrs_fixed1) !=
         tdx->attributes) {
             error_setg(errp, "Invalid attributes 0x%lx for TDX VM "
-                       "(fixed0 0x%llx, fixed1 0x%llx)",
+                       "(fixed0 0x%lx, fixed1 0x%lx)",
                        tdx->attributes, tdx_caps->attrs_fixed0,
                        tdx_caps->attrs_fixed1);
             return -1;
