@@ -583,4 +583,5 @@ bool kvm_dirty_ring_enabled(void);
 uint32_t kvm_dirty_ring_size(void);
 
 int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private);
+int kvm_encrypt_region(hwaddr start, hwaddr size, bool reg_region);
 #endif
