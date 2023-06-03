@@ -1376,6 +1376,14 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
                                     int fd,
                                     ram_addr_t offset,
                                     Error **errp);
+/**
+ * memory_region_set_gmem_fd:  Set RAM memory region with a restricted fd.
+ *
+ * @mr: the #MemoryRegion to be set.
+ * @fd: the fd to provide restricted memory.
+ */
+void memory_region_set_gmem_fd(MemoryRegion *mr, int fd);
+
 #endif
 
 /**
