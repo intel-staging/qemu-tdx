@@ -1362,7 +1362,7 @@ void kvm_set_max_memslot_size(hwaddr max_slot_size)
     kvm_max_slot_size = max_slot_size;
 }
 
-static int kvm_encrypt_region(hwaddr start, hwaddr size, bool encrypt)
+int kvm_encrypt_region(hwaddr start, hwaddr size, bool encrypt)
 {
     int r;
     struct kvm_memory_attributes  attr;
