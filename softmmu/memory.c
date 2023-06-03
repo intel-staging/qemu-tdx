@@ -1661,6 +1661,15 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
         error_propagate(errp, err);
     }
 }
+
+void memory_region_set_gmem_fd(MemoryRegion *mr, int fd)
+{
+    if (mr->ram_block) {
+        assert(fd >= 0);
+        mr->ram_block->gmem_fd = fd;
+    }
+}
+
 #endif
 
 void memory_region_init_ram_ptr(MemoryRegion *mr,
