@@ -3602,6 +3602,55 @@ void memory_region_init_ram(MemoryRegion *mr,
     vmstate_register_ram(mr, owner_dev);
 }
 
+void memory_region_init_ram_gmem(MemoryRegion *mr,
+                                 Object *owner,
+                                 const char *name,
+                                 uint64_t size,
+                                 Error **errp)
+{
+    DeviceState *owner_dev;
+    Error *err = NULL;
+    int priv_fd;
+
+    memory_region_init_ram_nomigrate(mr, owner, name, size, &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+
+    if (object_dynamic_cast(OBJECT(current_accel()), TYPE_KVM_ACCEL)) {
+        KVMState *s = KVM_STATE(current_accel());
+        struct kvm_create_guest_memfd gmem = {
+            .size = size,
+            /* TODO: add property to hostmem backend for huge pmd */
+            .flags = KVM_GUEST_MEMFD_ALLOW_HUGEPAGE,
+        };
+
+        priv_fd = kvm_vm_ioctl(s, KVM_CREATE_GUEST_MEMFD, &gmem);
+        if (priv_fd < 0) {
+            fprintf(stderr, "%s: error creating gmem: %s\n", __func__,
+                    strerror(-priv_fd));
+            abort();
+        }
+    } else {
+        fprintf(stderr, "%s: gmem unsupported accel: %s\n", __func__,
+                current_accel_name());
+        abort();
+    }
+
+    memory_region_set_gmem_fd(mr, priv_fd);
+    memory_region_set_default_private(mr);
+
+    /* This will assert if owner is neither NULL nor a DeviceState.
+     * We only want the owner here for the purposes of defining a
+     * unique name for migration. TODO: Ideally we should implement
+     * a naming scheme for Objects which are not DeviceStates, in
+     * which case we can relax this restriction.
+     */
+    owner_dev = DEVICE(owner);
+    vmstate_register_ram(mr, owner_dev);
+}
+
 void memory_region_init_rom(MemoryRegion *mr,
                             Object *owner,
                             const char *name,
