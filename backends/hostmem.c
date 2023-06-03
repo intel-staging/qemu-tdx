@@ -461,6 +461,20 @@ static void host_memory_backend_set_reserve(Object *o, bool value, Error **errp)
     }
     backend->reserve = value;
 }
+
+static bool host_memory_backend_get_private(Object *o, Error **errp)
+{
+    HostMemoryBackend *backend = MEMORY_BACKEND(o);
+
+    return backend->private;
+}
+
+static void host_memory_backend_set_private(Object *o, bool value, Error **errp)
+{
+    HostMemoryBackend *backend = MEMORY_BACKEND(o);
+
+    backend->private = value;
+}
 #endif /* CONFIG_LINUX */
 
 static bool
@@ -541,6 +555,10 @@ host_memory_backend_class_init(ObjectClass *oc, void *data)
         host_memory_backend_get_reserve, host_memory_backend_set_reserve);
     object_class_property_set_description(oc, "reserve",
         "Reserve swap space (or huge pages) if applicable");
+    object_class_property_add_bool(oc, "private",
+        host_memory_backend_get_private, host_memory_backend_set_private);
+    object_class_property_set_description(oc, "private",
+        "Use KVM gmem private memory");
 #endif /* CONFIG_LINUX */
     /*
      * Do not delete/rename option. This option must be considered stable
