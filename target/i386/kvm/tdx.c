@@ -22,6 +22,7 @@
 #include "sysemu/runstate.h"
 
 #include "exec/address-spaces.h"
+#include "exec/ramblock.h"
 #include "hw/i386/apic_internal.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
@@ -1164,8 +1165,30 @@ static void tdx_guest_set_quote_generation(
 static void tdx_guest_region_add(MemoryListener *listener,
                                  MemoryRegionSection *section)
 {
-    if (memory_region_can_be_private(section->mr)) {
-        memory_region_set_default_private(section->mr);
+    MemoryRegion *mr = section->mr;
+    Object *owner = memory_region_owner(mr);
+
+    if (owner && object_dynamic_cast(owner, TYPE_MEMORY_BACKEND) &&
+        object_property_get_bool(owner, "private", NULL) &&
+        mr->ram_block && mr->ram_block->gmem_fd < 0) {
+        struct kvm_create_guest_memfd gmem = {
+            .size = memory_region_size(mr),
+            /* TODO: add property to hostmem backend for huge pmd */
+            .flags = KVM_GUEST_MEMFD_HUGE_PMD,
+        };
+        int fd;
+
+        fd = kvm_vm_ioctl(kvm_state, KVM_CREATE_GUEST_MEMFD, &gmem);
+        if (fd < 0) {
+            fprintf(stderr, "%s: error creating gmem: %s\n", __func__,
+                    strerror(-fd));
+            abort();
+        }
+        memory_region_set_gmem_fd(mr, fd);
+    }
+
+    if (memory_region_can_be_private(mr)) {
+        memory_region_set_default_private(mr);
     }
 }
 
