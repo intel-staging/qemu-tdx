@@ -279,6 +279,7 @@ static void host_memory_backend_init(Object *obj)
     /* TODO: convert access to globals to compat properties */
     backend->merge = machine_mem_merge(machine);
     backend->dump = machine_dump_guest_core(machine);
+    backend->kvm_gmem = machine_require_kvm_gmem(machine);
     backend->reserve = true;
     backend->prealloc_threads = machine->smp.cpus;
 }
