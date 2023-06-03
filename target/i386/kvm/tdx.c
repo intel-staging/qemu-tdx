@@ -18,6 +18,7 @@
 #include "qom/object_interfaces.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/sysemu.h"
+#include "exec/ramblock.h"
 
 #include "hw/i386/x86.h"
 #include "kvm_i386.h"
@@ -460,6 +461,12 @@ static void update_tdx_cpuid_lookup_by_tdx_caps(void)
             (~tdx_caps->xfam_fixed0 & CPUID_XSTATE_XSS_MASK) >> 32;
     tdx_cpuid_lookup[FEAT_XSAVE_XSS_HI].tdx_fixed1 =
             (tdx_caps->xfam_fixed1 & CPUID_XSTATE_XSS_MASK) >> 32;
+}
+
+void tdx_set_tdvf_region(MemoryRegion *tdvf_mr)
+{
+    assert(!tdx_guest->tdvf_mr);
+    tdx_guest->tdvf_mr = tdvf_mr;
 }
 
 static int tdx_kvm_type(X86ConfidentialGuest *cg)
