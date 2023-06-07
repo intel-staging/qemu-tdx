@@ -2379,4 +2379,14 @@ struct kvm_memory_attributes {
 
 #define KVM_MEMORY_ATTRIBUTE_PRIVATE           (1ULL << 3)
 
+#define KVM_CREATE_GUEST_MEMFD  _IOWR(KVMIO,  0xd4, struct kvm_create_guest_memfd)
+
+#define KVM_GUEST_MEMFD_HUGE_PMD		(1ULL << 0)
+
+struct kvm_create_guest_memfd {
+	__u64 size;
+	__u64 flags;
+	__u64 reserved[6];
+};
+
 #endif /* __LINUX_KVM_H */
