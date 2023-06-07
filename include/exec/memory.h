@@ -232,6 +232,9 @@ typedef struct IOMMUTLBEvent {
 /* RAM that isn't accessible through normal means. */
 #define RAM_PROTECTED (1 << 8)
 
+/* RAM is default private */
+#define RAM_DEFAULT_PRIVATE     (1 << 9)
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,
@@ -1680,6 +1683,9 @@ bool memory_region_is_protected(MemoryRegion *mr);
  * @mr: the memory region being queried
  */
 bool memory_region_can_be_private(MemoryRegion *mr);
+
+void memory_region_set_default_private(MemoryRegion *mr);
+bool memory_region_is_default_private(MemoryRegion *mr);
 
 /**
  * memory_region_get_iommu: check whether a memory region is an iommu
