@@ -1362,6 +1362,24 @@ void kvm_set_max_memslot_size(hwaddr max_slot_size)
     kvm_max_slot_size = max_slot_size;
 }
 
+static int kvm_encrypt_region(hwaddr start, hwaddr size, bool encrypt)
+{
+    int r;
+    struct kvm_memory_attributes  attr;
+    attr.attributes = encrypt ? KVM_MEMORY_ATTRIBUTE_PRIVATE : 0;
+
+    attr.address = start;
+    attr.size = size;
+    attr.flags = 0;
+
+    r = kvm_vm_ioctl(kvm_state, KVM_SET_MEMORY_ATTRIBUTES, &attr);
+    if (r) {
+        warn_report("%s: failed to set memory attr (0x%lx+%#zx) error '%s'",
+                     __func__, start, size, strerror(errno));
+    }
+    return r;
+}
+
 /* Called with KVMMemoryListener.slots_lock held */
 static void kvm_set_phys_mem(KVMMemoryListener *kml,
                              MemoryRegionSection *section, bool add)
@@ -1467,6 +1485,16 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
                     strerror(-err));
             abort();
         }
+
+        if (memory_region_is_default_private(mr)) {
+            err = kvm_encrypt_region(start_addr, slot_size, true);
+            if (err) {
+                fprintf(stderr, "%s: error converting slot to private: %s\n",
+                        __func__, strerror(-err));
+                abort();
+            }
+        }
+
         start_addr += slot_size;
         ram_start_offset += slot_size;
         ram += slot_size;
@@ -3004,24 +3032,6 @@ static void kvm_eat_signals(CPUState *cpu)
             exit(1);
         }
     } while (sigismember(&chkset, SIG_IPI));
-}
-
-static int kvm_encrypt_region(hwaddr start, hwaddr size, bool encrypt)
-{
-    int r;
-    struct kvm_memory_attributes  attr;
-    attr.attributes = encrypt ? KVM_MEMORY_ATTRIBUTE_PRIVATE : 0;
-
-    attr.address = start;
-    attr.size = size;
-    attr.flags = 0;
-
-    r = kvm_vm_ioctl(kvm_state, KVM_SET_MEMORY_ATTRIBUTES, &attr);
-    if (r) {
-        warn_report("%s: failed to set memory attr (0x%lx+%#zx) error '%s'",
-                     __func__, start, size, strerror(errno));
-    }
-    return r;
 }
 
 int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
