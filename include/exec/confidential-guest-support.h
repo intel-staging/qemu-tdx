@@ -51,11 +51,15 @@ struct ConfidentialGuestSupport {
      * so 'ready' is not set, we'll abort.
      */
     bool ready;
+
+    bool disable_pv_clock;
 };
 
 typedef struct ConfidentialGuestSupportClass {
     ObjectClass parent;
 } ConfidentialGuestSupportClass;
+
+#define CONFIDENTIAL_GUEST_SUPPORT_DISABLE_PV_CLOCK     "disable-pv-clock"
 
 #endif /* !CONFIG_USER_ONLY */
 
