@@ -19,9 +19,11 @@
 #include "sysemu/kvm.h"
 #include "sysemu/runstate.h"
 #include "sysemu/hw_accel.h"
+#include "exec/confidential-guest-support.h"
 #include "kvm/kvm_i386.h"
 #include "migration/vmstate.h"
 #include "hw/sysbus.h"
+#include "hw/boards.h"
 #include "hw/kvm/clock.h"
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
@@ -331,8 +333,14 @@ static const TypeInfo kvmclock_info = {
 void kvmclock_create(bool create_always)
 {
     X86CPU *cpu = X86_CPU(first_cpu);
+    MachineState *ms = MACHINE(qdev_get_machine());
+    ConfidentialGuestSupport *cgs = ms->cgs;
 
-    if (!kvm_enabled() || !kvm_has_adjust_clock())
+    if (!kvm_enabled() || !kvm_has_adjust_clock() ||
+        (cgs &&
+         object_property_get_bool(OBJECT(cgs),
+                                  CONFIDENTIAL_GUEST_SUPPORT_DISABLE_PV_CLOCK,
+                                  NULL)))
         return;
 
     if (create_always ||
