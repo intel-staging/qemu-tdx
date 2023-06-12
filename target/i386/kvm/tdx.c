@@ -1034,6 +1034,9 @@ static void tdx_guest_init(Object *obj)
                             tdx_guest_set_quote_generation,
                             NULL, NULL);
 
+    object_property_set_bool(obj, CONFIDENTIAL_GUEST_SUPPORT_DISABLE_PV_CLOCK,
+                             true, NULL);
+
     tdx->event_notify_interrupt = -1;
     tdx->event_notify_apic_id = -1;
 }
