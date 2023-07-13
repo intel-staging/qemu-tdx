@@ -1056,12 +1056,16 @@ static hwaddr tdx_shared_bit(X86CPU *cpu)
     return (cpu->phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
 }
 
+/* 64MB at most in one call. What value is appropriate? */
+#define TDX_MAP_GPA_MAX_LEN     (64 * 1024 * 1024)
+
 static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
     hwaddr shared_bit = tdx_shared_bit(cpu);
     hwaddr gpa = vmcall->in_r12 & ~shared_bit;
     bool private = !(vmcall->in_r12 & shared_bit);
     hwaddr size = vmcall->in_r13;
+    bool retry = false;
     int ret = 0;
 
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
@@ -1080,12 +1084,25 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         return;
     }
 
+    if (size > TDX_MAP_GPA_MAX_LEN) {
+        retry = true;
+        size = TDX_MAP_GPA_MAX_LEN;
+    }
+
     if (size > 0) {
         ret = kvm_convert_memory(gpa, size, private);
     }
 
     if (!ret) {
-        vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+        if (retry) {
+            vmcall->status_code = TDG_VP_VMCALL_RETRY;
+            vmcall->out_r11 = gpa + size;
+            if (!private) {
+                vmcall->out_r11 |= shared_bit;
+            }
+        } else {
+            vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+        }
     }
 }
 
