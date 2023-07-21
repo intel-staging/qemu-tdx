@@ -34,9 +34,17 @@ static MemoryListener kvm_x86_sw_protected_vm_memory_listener = {
 int sw_protected_vm_kvm_init(MachineState *ms, Error **errp)
 {
     SwProtectedVm *spvm = SW_PROTECTED_VM(OBJECT(ms->cgs));
+    X86MachineState *x86ms = X86_MACHINE(ms);
 
     memory_listener_register(&kvm_x86_sw_protected_vm_memory_listener,
                              &address_space_memory);
+
+    if (x86ms->smm == ON_OFF_AUTO_AUTO) {
+        x86ms->smm = ON_OFF_AUTO_OFF;
+    } else if (x86ms->smm == ON_OFF_AUTO_ON) {
+        error_setg(errp, "X86_SW_PROTECTED_VM doesn't support SMM");
+        return -EINVAL;
+    }
 
     spvm->parent_obj.ready = true;
     return 0;
