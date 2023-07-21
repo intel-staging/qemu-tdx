@@ -2654,6 +2654,13 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
 
     if (x86ms->vm_type == KVM_X86_SW_PROTECTED_VM) {
         memory_listener_register(&kvm_x86_sw_protected_vm_memory_listener, &address_space_memory);
+
+        if (x86ms->smm == ON_OFF_AUTO_AUTO) {
+            x86ms->smm = ON_OFF_AUTO_OFF;
+        } else if (x86ms->smm == ON_OFF_AUTO_ON) {
+            error_report("X86_SW_PROTECTED_VM doesn't support SMM");
+            return -EINVAL;
+        }
     }
 
     if (!kvm_check_extension(s, KVM_CAP_IRQ_ROUTING)) {
