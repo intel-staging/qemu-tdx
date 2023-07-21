@@ -2614,6 +2614,7 @@ static void kvm_x86_sw_protected_vm_region_add(MemoryListener *listenr,
             exit(1);
         }
         memory_region_set_gmem_fd(mr, fd);
+        memory_region_set_default_private(mr);
     }
 }
 
