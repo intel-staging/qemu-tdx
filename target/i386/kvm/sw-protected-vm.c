@@ -12,13 +12,31 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qom/object_interfaces.h"
+#include "exec/address-spaces.h"
+#include "sysemu/kvm.h"
 
 #include "hw/i386/x86.h"
 #include "sw-protected-vm.h"
 
+static void kvm_x86_sw_protected_vm_region_add(MemoryListener *listenr,
+                                               MemoryRegionSection *section)
+{
+    memory_region_set_default_private(section->mr);
+}
+
+static MemoryListener kvm_x86_sw_protected_vm_memory_listener = {
+    .name = "kvm_x86_sw_protected_vm_memory_listener",
+    .region_add = kvm_x86_sw_protected_vm_region_add,
+    /* Higher than KVM memory listener = 10. */
+    .priority = MEMORY_LISTENER_PRIORITY_ACCEL_HIGH,
+};
+
 int sw_protected_vm_kvm_init(MachineState *ms, Error **errp)
 {
     SwProtectedVm *spvm = SW_PROTECTED_VM(OBJECT(ms->cgs));
+
+    memory_listener_register(&kvm_x86_sw_protected_vm_memory_listener,
+                             &address_space_memory);
 
     spvm->parent_obj.ready = true;
     return 0;
