@@ -1137,6 +1137,7 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
     MemoryRegion *bios, *isa_bios;
     int bios_size, isa_bios_size;
     ssize_t ret;
+    X86MachineState *x86ms = X86_MACHINE(ms);
 
     /* BIOS load */
     bios_name = ms->firmware ?: default_firmware;
@@ -1174,19 +1175,20 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
     }
     g_free(filename);
 
-    /* map the last 128KB of the BIOS in ISA space */
-    isa_bios_size = MIN(bios_size, 128 * KiB);
-    isa_bios = g_malloc(sizeof(*isa_bios));
-    memory_region_init_alias(isa_bios, NULL, "isa-bios", bios,
-                             bios_size - isa_bios_size, isa_bios_size);
-    memory_region_add_subregion_overlap(rom_memory,
-                                        0x100000 - isa_bios_size,
-                                        isa_bios,
-                                        1);
-    if (!isapc_ram_fw) {
-        memory_region_set_readonly(isa_bios, true);
+    if (x86ms->vm_type != KVM_X86_SW_PROTECTED_VM) {
+        /* map the last 128KB of the BIOS in ISA space */
+        isa_bios_size = MIN(bios_size, 128 * KiB);
+        isa_bios = g_malloc(sizeof(*isa_bios));
+        memory_region_init_alias(isa_bios, NULL, "isa-bios", bios,
+                                bios_size - isa_bios_size, isa_bios_size);
+        memory_region_add_subregion_overlap(rom_memory,
+                                            0x100000 - isa_bios_size,
+                                            isa_bios,
+                                            1);
+        if (!isapc_ram_fw) {
+            memory_region_set_readonly(isa_bios, true);
+        }
     }
-
     /* map all the bios at the top of memory */
     memory_region_add_subregion(rom_memory,
                                 (uint32_t)(-bios_size),
