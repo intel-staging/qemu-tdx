@@ -1096,7 +1096,7 @@ void pc_memory_init(PCMachineState *pcms,
     /* Initialize PC system firmware */
     pc_system_firmware_init(pcms, rom_memory);
 
-    if (!is_tdx_vm()) {
+    if (!is_tdx_vm() && x86ms->vm_type != KVM_X86_SW_PROTECTED_VM) {
         option_rom_mr = g_malloc(sizeof(*option_rom_mr));
         memory_region_init_ram(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE,
                             &error_fatal);
