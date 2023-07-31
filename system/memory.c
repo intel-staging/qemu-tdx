@@ -1862,6 +1862,19 @@ bool memory_region_has_gmem_fd(MemoryRegion *mr)
     return mr->ram_block && mr->ram_block->gmem_fd >= 0;
 }
 
+bool memory_region_is_default_private(MemoryRegion *mr)
+{
+    return memory_region_has_gmem_fd(mr) &&
+           (mr->ram_block->flags & RAM_DEFAULT_PRIVATE);
+}
+
+void memory_region_set_default_private(MemoryRegion *mr)
+{
+    if (memory_region_has_gmem_fd(mr)) {
+        mr->ram_block->flags |= RAM_DEFAULT_PRIVATE;
+    }
+}
+
 uint8_t memory_region_get_dirty_log_mask(MemoryRegion *mr)
 {
     uint8_t mask = mr->dirty_log_mask;
