@@ -246,6 +246,9 @@ typedef struct IOMMUTLBEvent {
 /* RAM can be private that has kvm gmem backend */
 #define RAM_GUEST_MEMFD   (1 << 12)
 
+/* RAM is default private */
+#define RAM_DEFAULT_PRIVATE     (1 << 13)
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,
@@ -1714,6 +1717,9 @@ bool memory_region_is_protected(MemoryRegion *mr);
  * @mr: the memory region being queried
  */
 bool memory_region_has_guest_memfd(MemoryRegion *mr);
+
+void memory_region_set_default_private(MemoryRegion *mr);
+bool memory_region_is_default_private(MemoryRegion *mr);
 
 /**
  * memory_region_get_iommu: check whether a memory region is an iommu
