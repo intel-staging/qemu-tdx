@@ -3425,117 +3425,125 @@ int qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque)
     return ret;
 }
 
+static int ram_block_discard_range_fd(RAMBlock *rb, uint64_t start,
+                                      size_t length, int fd)
+{
+    uint8_t *host_startaddr = rb->host + start;
+    bool need_madvise, need_fallocate;
+    int ret = -1;
+
+    errno = ENOTSUP; /* If we are missing MADVISE etc */
+
+    /* The logic here is messy;
+     *    madvise DONTNEED fails for hugepages
+     *    fallocate works on hugepages and shmem
+     *    shared anonymous memory requires madvise REMOVE
+     */
+    need_madvise = (rb->page_size == qemu_host_page_size) && (rb->fd == fd);
+    need_fallocate = fd != -1;
+
+    if (need_fallocate) {
+        /* For a file, this causes the area of the file to be zero'd
+         * if read, and for hugetlbfs also causes it to be unmapped
+         * so a userfault will trigger.
+         */
+#ifdef CONFIG_FALLOCATE_PUNCH_HOLE
+        /*
+         * We'll discard data from the actual file, even though we only
+         * have a MAP_PRIVATE mapping, possibly messing with other
+         * MAP_PRIVATE/MAP_SHARED mappings. There is no easy way to
+         * change that behavior whithout violating the promised
+         * semantics of ram_block_discard_range().
+         *
+         * Only warn, because it works as long as nobody else uses that
+         * file.
+         */
+        if (!qemu_ram_is_shared(rb)) {
+            warn_report_once("%s: Discarding RAM"
+                                " in private file mappings is possibly"
+                                " dangerous, because it will modify the"
+                                " underlying file and will affect other"
+                                " users of the file", __func__);
+        }
+
+        ret = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+                        start, length);
+        if (ret) {
+            ret = -errno;
+            error_report("%s: Failed to fallocate %s:%" PRIx64 " +%zx (%d)",
+                            __func__, rb->idstr, start, length, ret);
+            return ret;
+        }
+#else
+        ret = -ENOSYS;
+        error_report("%s: fallocate not available/file "
+                     "%s:%" PRIx64 " +%zx (%d)",
+                     __func__, rb->idstr, start, length, ret);
+        return ret;
+#endif
+    }
+
+    if (need_madvise) {
+        /* For normal RAM this causes it to be unmapped,
+         * for shared memory it causes the local mapping to disappear
+         * and to fall back on the file contents (which we just
+         * fallocate'd away).
+         */
+#if defined(CONFIG_MADVISE)
+        if (qemu_ram_is_shared(rb) && fd < 0) {
+            ret = madvise(host_startaddr, length, QEMU_MADV_REMOVE);
+        } else {
+            ret = madvise(host_startaddr, length, QEMU_MADV_DONTNEED);
+        }
+        if (ret) {
+            ret = -errno;
+            error_report("%s: Failed to discard range %s:%" PRIx64 " +%zx (%d)",
+                         __func__, rb->idstr, start, length, ret);
+            return ret;
+        }
+#else
+        ret = -ENOSYS;
+        error_report("%s: MADVISE not available %s:%" PRIx64 " +%zx (%d)",
+                        __func__, rb->idstr, start, length, ret);
+        return ret;
+#endif
+    }
+
+    trace_ram_block_discard_range(rb->idstr, host_startaddr, length,
+                                  need_madvise, need_fallocate, ret);
+    return ret;
+}
+
 /*
  * Unmap pages of memory from start to start+length such that
  * they a) read as 0, b) Trigger whatever fault mechanism
  * the OS provides for postcopy.
- * The pages must be unmapped by the end of the function.
- * Returns: 0 on success, none-0 on failure
  *
+ * The pages must be unmapped by the end of the function.
+ * Returns: 0 on success, none-0 on failure.
  */
 int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
 {
-    int ret = -1;
-
     uint8_t *host_startaddr = rb->host + start;
 
     if (!QEMU_PTR_IS_ALIGNED(host_startaddr, rb->page_size)) {
         error_report("%s: Unaligned start address: %p",
                      __func__, host_startaddr);
-        goto err;
+        return -1;
     }
 
-    if ((start + length) <= rb->max_length) {
-        bool need_madvise, need_fallocate;
-        if (!QEMU_IS_ALIGNED(length, rb->page_size)) {
-            error_report("%s: Unaligned length: %zx", __func__, length);
-            goto err;
-        }
-
-        errno = ENOTSUP; /* If we are missing MADVISE etc */
-
-        /* The logic here is messy;
-         *    madvise DONTNEED fails for hugepages
-         *    fallocate works on hugepages and shmem
-         *    shared anonymous memory requires madvise REMOVE
-         */
-        need_madvise = (rb->page_size == qemu_host_page_size);
-        need_fallocate = rb->fd != -1;
-        if (need_fallocate) {
-            /* For a file, this causes the area of the file to be zero'd
-             * if read, and for hugetlbfs also causes it to be unmapped
-             * so a userfault will trigger.
-             */
-#ifdef CONFIG_FALLOCATE_PUNCH_HOLE
-            /*
-             * We'll discard data from the actual file, even though we only
-             * have a MAP_PRIVATE mapping, possibly messing with other
-             * MAP_PRIVATE/MAP_SHARED mappings. There is no easy way to
-             * change that behavior whithout violating the promised
-             * semantics of ram_block_discard_range().
-             *
-             * Only warn, because it works as long as nobody else uses that
-             * file.
-             */
-            if (!qemu_ram_is_shared(rb)) {
-                warn_report_once("%s: Discarding RAM"
-                                 " in private file mappings is possibly"
-                                 " dangerous, because it will modify the"
-                                 " underlying file and will affect other"
-                                 " users of the file", __func__);
-            }
-
-            ret = fallocate(rb->fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
-                            start, length);
-            if (ret) {
-                ret = -errno;
-                error_report("%s: Failed to fallocate %s:%" PRIx64 " +%zx (%d)",
-                             __func__, rb->idstr, start, length, ret);
-                goto err;
-            }
-#else
-            ret = -ENOSYS;
-            error_report("%s: fallocate not available/file"
-                         "%s:%" PRIx64 " +%zx (%d)",
-                         __func__, rb->idstr, start, length, ret);
-            goto err;
-#endif
-        }
-        if (need_madvise) {
-            /* For normal RAM this causes it to be unmapped,
-             * for shared memory it causes the local mapping to disappear
-             * and to fall back on the file contents (which we just
-             * fallocate'd away).
-             */
-#if defined(CONFIG_MADVISE)
-            if (qemu_ram_is_shared(rb) && rb->fd < 0) {
-                ret = madvise(host_startaddr, length, QEMU_MADV_REMOVE);
-            } else {
-                ret = madvise(host_startaddr, length, QEMU_MADV_DONTNEED);
-            }
-            if (ret) {
-                ret = -errno;
-                error_report("%s: Failed to discard range "
-                             "%s:%" PRIx64 " +%zx (%d)",
-                             __func__, rb->idstr, start, length, ret);
-                goto err;
-            }
-#else
-            ret = -ENOSYS;
-            error_report("%s: MADVISE not available %s:%" PRIx64 " +%zx (%d)",
-                         __func__, rb->idstr, start, length, ret);
-            goto err;
-#endif
-        }
-        trace_ram_block_discard_range(rb->idstr, host_startaddr, length,
-                                      need_madvise, need_fallocate, ret);
-    } else {
+    if ((start + length) > rb->max_length) {
         error_report("%s: Overrun block '%s' (%" PRIu64 "/%zx/" RAM_ADDR_FMT")",
                      __func__, rb->idstr, start, length, rb->max_length);
+        return -1;
     }
 
-err:
-    return ret;
+    if (!QEMU_IS_ALIGNED(length, rb->page_size)) {
+        error_report("%s: Unaligned length: %zx", __func__, length);
+        return -1;
+    }
+
+    return ram_block_discard_range_fd(rb, start, length, rb->fd);
 }
 
 bool ramblock_is_pmem(RAMBlock *rb)
