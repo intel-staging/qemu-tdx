@@ -3733,3 +3733,39 @@ bool ram_block_discard_is_required(void)
     return qatomic_read(&ram_block_discard_required_cnt) ||
            qatomic_read(&ram_block_coordinated_discard_required_cnt);
 }
+
+int ram_block_convert_range(RAMBlock *rb, uint64_t start, size_t length,
+                            bool shared_to_private)
+{
+    int fd;
+
+    if (!rb || rb->gmem_fd < 0) {
+        return -1;
+    }
+
+    if (!QEMU_PTR_IS_ALIGNED(start, qemu_host_page_size) ||
+        !QEMU_PTR_IS_ALIGNED(length, qemu_host_page_size)) {
+        return -1;
+    }
+
+    if (!length) {
+        return -1;
+    }
+
+    if (start + length > rb->max_length) {
+        return -1;
+    }
+
+    if (shared_to_private) {
+        void *host_startaddr = rb->host + start;
+
+        if (!QEMU_PTR_IS_ALIGNED(host_startaddr, qemu_host_page_size)) {
+            return -1;
+        }
+        fd = rb->fd;
+    } else {
+        fd = rb->gmem_fd;
+    }
+
+    return ram_block_discard_range_fd(rb, start, length, fd);
+}
