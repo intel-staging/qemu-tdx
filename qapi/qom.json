@@ -944,6 +944,7 @@
       'if': 'CONFIG_SECRET_KEYRING' },
     'sev-guest',
     'thread-context',
+    'sw-protected-vm',
     's390-pv-guest',
     'throttle-group',
     'tls-creds-anon',
