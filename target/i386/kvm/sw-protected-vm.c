@@ -10,9 +10,19 @@
  */
 
 #include "qemu/osdep.h"
+#include "qapi/error.h"
 #include "qom/object_interfaces.h"
 
+#include "hw/i386/x86.h"
 #include "sw-protected-vm.h"
+
+int sw_protected_vm_kvm_init(MachineState *ms, Error **errp)
+{
+    SwProtectedVm *spvm = SW_PROTECTED_VM(OBJECT(ms->cgs));
+
+    spvm->parent_obj.ready = true;
+    return 0;
+}
 
 /* x86-sw-protected-vm */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(SwProtectedVm,

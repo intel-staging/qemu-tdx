@@ -2587,6 +2587,8 @@ static int kvm_confidential_guest_init(MachineState *ms, Error **errp)
 {
     if (object_dynamic_cast(OBJECT(ms->cgs), TYPE_SEV_GUEST)) {
         return sev_kvm_init(ms->cgs, errp);
+    } else if (object_dynamic_cast(OBJECT(ms->cgs), TYPE_SW_PROTECTED_VM)) {
+        return sw_protected_vm_kvm_init(ms, errp);
     }
 
     return 0;

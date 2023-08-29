@@ -14,4 +14,6 @@ typedef struct SwProtectedVm {
     ConfidentialGuestSupport parent_obj;
 } SwProtectedVm;
 
+int sw_protected_vm_kvm_init(MachineState *ms, Error **errp);
+
 #endif /* QEMU_I386_SW_PROTECTED_VM_H */
