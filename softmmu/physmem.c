@@ -3767,5 +3767,6 @@ int ram_block_convert_range(RAMBlock *rb, uint64_t start, size_t length,
         fd = rb->gmem_fd;
     }
 
+    trace_ram_block_convert_range(rb->mr->name, start, length, shared_to_private ? "private" : "shared");
     return ram_block_discard_range_fd(rb, start, length, fd);
 }
