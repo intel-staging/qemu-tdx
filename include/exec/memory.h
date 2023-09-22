@@ -243,6 +243,9 @@ typedef struct IOMMUTLBEvent {
 /* RAM FD is opened read-only */
 #define RAM_READONLY_FD (1 << 11)
 
+/* RAM can be private that has kvm gmem backend */
+#define RAM_KVM_GMEM    (1 << 12)
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,
@@ -1681,6 +1684,16 @@ static inline bool memory_region_is_romd(MemoryRegion *mr)
  * @mr: the memory region being queried
  */
 bool memory_region_is_protected(MemoryRegion *mr);
+
+/**
+ * memory_region_has_gmem_fd: check whether a memory region has KVM gmem fd
+ *     associated
+ *
+ * Returns %true if a memory region's ram_block has valid gmem fd assigned.
+ *
+ * @mr: the memory region being queried
+ */
+bool memory_region_has_gmem_fd(MemoryRegion *mr);
 
 /**
  * memory_region_get_iommu: check whether a memory region is an iommu
