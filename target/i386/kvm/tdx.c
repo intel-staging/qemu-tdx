@@ -20,6 +20,8 @@
 
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
+    ms->require_kvm_gmem = true;
+
     return 0;
 }
 
