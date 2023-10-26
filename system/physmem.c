@@ -3532,7 +3532,7 @@ int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length)
 
     uint8_t *host_startaddr = rb->host + start;
 
-    if (!QEMU_PTR_IS_ALIGNED(host_startaddr, rb->page_size)) {
+    if (!QEMU_PTR_IS_ALIGNED(host_startaddr, qemu_host_page_size)) {
         error_report("ram_block_discard_range: Unaligned start address: %p",
                      host_startaddr);
         goto err;
