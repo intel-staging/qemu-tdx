@@ -1803,6 +1803,38 @@ static void dirty_memory_extend(ram_addr_t old_ram_size,
     }
 }
 
+#define HPAGE_PMD_SIZE_PATH "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size"
+#define DEFAULT_PMD_SIZE (1ul << 21)
+
+uint32_t get_thp_size(void)
+{
+    gchar *content = NULL;
+    const char *endptr;
+    static uint64_t thp_size = 0;
+    uint64_t tmp;
+
+    if (thp_size != 0) {
+        return thp_size;
+    }
+
+    if (g_file_get_contents(HPAGE_PMD_SIZE_PATH, &content, NULL, NULL) &&
+        !qemu_strtou64(content, &endptr, 0, &tmp) &&
+        (!endptr || *endptr == '\n')) {
+        /* Sanity-check the value and fallback to something reasonable. */
+        if (!tmp || !is_power_of_2(tmp)) {
+            warn_report("Read unsupported THP size: %" PRIx64, tmp);
+        } else {
+            thp_size = tmp;
+        }
+    }
+
+    if (!thp_size) {
+        thp_size = DEFAULT_PMD_SIZE;
+    }
+
+    return thp_size;
+}
+
 static void ram_block_add(RAMBlock *new_block, Error **errp)
 {
     const bool noreserve = qemu_ram_is_noreserve(new_block);

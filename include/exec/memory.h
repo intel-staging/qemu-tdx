@@ -3142,6 +3142,8 @@ bool ram_block_discard_is_disabled(void);
  */
 bool ram_block_discard_is_required(void);
 
+uint32_t get_thp_size(void);
+
 #endif
 
 #endif
