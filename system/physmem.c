@@ -1803,6 +1803,40 @@ static void dirty_memory_extend(ram_addr_t old_ram_size,
     }
 }
 
+#ifdef CONFIG_KVM
+#define HPAGE_PMD_SIZE_PATH "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size"
+#define DEFAULT_PMD_SIZE (1ul << 21)
+
+static uint32_t get_thp_size(void)
+{
+    gchar *content = NULL;
+    const char *endptr;
+    static uint64_t thp_size = 0;
+    uint64_t tmp;
+
+    if (thp_size != 0) {
+        return thp_size;
+    }
+
+    if (g_file_get_contents(HPAGE_PMD_SIZE_PATH, &content, NULL, NULL) &&
+        !qemu_strtou64(content, &endptr, 0, &tmp) &&
+        (!endptr || *endptr == '\n')) {
+        /* Sanity-check the value and fallback to something reasonable. */
+        if (!tmp || !is_power_of_2(tmp)) {
+            warn_report("Read unsupported THP size: %" PRIx64, tmp);
+        } else {
+            thp_size = tmp;
+        }
+    }
+
+    if (!thp_size) {
+        thp_size = DEFAULT_PMD_SIZE;
+    }
+
+    return thp_size;
+}
+#endif
+
 static void ram_block_add(RAMBlock *new_block, Error **errp)
 {
     const bool noreserve = qemu_ram_is_noreserve(new_block);
@@ -1844,8 +1878,8 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
 #ifdef CONFIG_KVM
     if (kvm_enabled() && new_block->flags & RAM_GUEST_MEMFD &&
         new_block->guest_memfd < 0) {
-        /* TODO: to decide if KVM_GUEST_MEMFD_ALLOW_HUGEPAGE is supported */
-        uint64_t flags = 0;
+        uint64_t flags = QEMU_IS_ALIGNED(new_block->max_length, get_thp_size()) ?
+                         KVM_GUEST_MEMFD_ALLOW_HUGEPAGE : 0;
         new_block->guest_memfd = kvm_create_guest_memfd(new_block->max_length,
                                                         flags, errp);
         if (new_block->guest_memfd < 0) {
