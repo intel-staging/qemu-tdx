@@ -313,6 +313,11 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
     if (function == 1 && reg == R_ECX && !enable_cpu_pm) {
         *ret &= ~CPUID_EXT_MONITOR;
     }
+
+    /* QEMU Intel-pt support is broken, don't advertise Intel-PT */
+    if (function == 7 && reg == R_EBX) {
+        *ret &= ~CPUID_7_0_EBX_INTEL_PT;
+    }
 }
 
 enum tdx_ioctl_level{
