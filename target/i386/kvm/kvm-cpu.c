@@ -15,6 +15,7 @@
 #include "hw/boards.h"
 
 #include "kvm_i386.h"
+#include "tdx.h"
 #include "hw/core/accel-cpu.h"
 
 static void kvm_set_guest_phys_bits(CPUState *cs)
@@ -120,6 +121,10 @@ static void kvm_cpu_max_instance_init(X86CPU *cpu)
         kvm_arch_get_supported_cpuid(s, 0x80000000, 0, R_EAX);
     env->cpuid_min_xlevel2 =
         kvm_arch_get_supported_cpuid(s, 0xC0000000, 0, R_EAX);
+
+    if (is_tdx_vm()) {
+        object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
+    }
 }
 
 static void kvm_cpu_xsave_init(void)
