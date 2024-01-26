@@ -503,6 +503,8 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
     g_autofree struct kvm_tdx_init_vm *init_vm = NULL;
     int r = 0;
 
+    object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
+
     QEMU_LOCK_GUARD(&tdx_guest->lock);
     if (tdx_guest->initialized) {
         return r;
