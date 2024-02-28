@@ -15,6 +15,9 @@ typedef struct TdxGuestClass {
     X86ConfidentialGuestClass parent_class;
 } TdxGuestClass;
 
+/* TDX requires bus frequency 25MHz */
+#define TDX_APIC_BUS_CYCLES_NS 40
+
 enum TdxRamType{
     TDX_RAM_UNACCEPTED,
     TDX_RAM_ADDED,
