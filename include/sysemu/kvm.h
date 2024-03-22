@@ -536,4 +536,8 @@ void kvm_mark_guest_state_protected(void);
  * reported for the VM.
  */
 bool kvm_hwpoisoned_mem(void);
+
+int kvm_set_memory_attributes_private(hwaddr start, hwaddr size);
+int kvm_set_memory_attributes_shared(hwaddr start, hwaddr size);
+
 #endif
