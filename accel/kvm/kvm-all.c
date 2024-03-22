@@ -2698,7 +2698,7 @@ bool kvm_cpu_check_are_resettable(void)
 
 static void do_kvm_cpu_synchronize_state(CPUState *cpu, run_on_cpu_data arg)
 {
-    if (!cpu->vcpu_dirty) {
+    if (!cpu->vcpu_dirty && !kvm_state->guest_state_protected) {
         int ret = kvm_arch_get_registers(cpu);
         if (ret) {
             error_report("Failed to get registers: %s", strerror(-ret));
@@ -2712,7 +2712,7 @@ static void do_kvm_cpu_synchronize_state(CPUState *cpu, run_on_cpu_data arg)
 
 void kvm_cpu_synchronize_state(CPUState *cpu)
 {
-    if (!cpu->vcpu_dirty) {
+    if (!cpu->vcpu_dirty && !kvm_state->guest_state_protected) {
         run_on_cpu(cpu, do_kvm_cpu_synchronize_state, RUN_ON_CPU_NULL);
     }
 }
@@ -2747,6 +2747,11 @@ static void do_kvm_cpu_synchronize_post_init(CPUState *cpu, run_on_cpu_data arg)
 
 void kvm_cpu_synchronize_post_init(CPUState *cpu)
 {
+    /*
+     * This runs before the machine_init_done notifiers, and is the last
+     * opportunity to synchronize the state of confidential guests.
+     */
+    assert(!kvm_state->guest_state_protected);
     run_on_cpu(cpu, do_kvm_cpu_synchronize_post_init, RUN_ON_CPU_NULL);
 }
 
@@ -4093,4 +4098,9 @@ void query_stats_schemas_cb(StatsSchemaList **result, Error **errp)
         stats_args.errp = errp;
         query_stats_schema_vcpu(first_cpu, &stats_args);
     }
+}
+
+void kvm_mark_guest_state_protected(void)
+{
+    kvm_state->guest_state_protected = true;
 }
