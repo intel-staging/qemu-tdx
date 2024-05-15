@@ -2928,6 +2928,8 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
         if (!to_private) {
             return 0;
         }
+        warn_report("Cannot convert non memory region address (0x%"HWADDR_PRIx
+                    " ,+ 0x%"HWADDR_PRIx") to private", start, size);
         return -1;
     }
 
