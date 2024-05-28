@@ -342,7 +342,7 @@ static struct kvm_cpuid2 *try_get_cpuid(KVMState *s, int max)
     return cpuid;
 }
 
-static void pr_cpuid_entries(const char *title, struct kvm_cpuid2 *cpuids)
+void pr_cpuid_entries(const char *title, struct kvm_cpuid2 *cpuids)
 {
     int i, nr = cpuids->nent;
     struct kvm_cpuid_entry2 *e;

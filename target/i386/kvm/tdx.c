@@ -685,7 +685,9 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
         init_vm->cpuid.nent = kvm_x86_add_kvm_cpuid(env, init_vm->cpuid.entries, 0);
     }
     init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, init_vm->cpuid.nent);
+    pr_cpuid_entries("constructed CPUID for KVM_TDX_INIT_VM:", &init_vm->cpuid);
     tdx_filter_cpuid(&init_vm->cpuid);
+    pr_cpuid_entries("constructed CPUID after filtered with configurable bits reported in kvm_caps :", &init_vm->cpuid);
 
     init_vm->attributes = tdx_guest->attributes;
     init_vm->xfam = env->features[FEAT_XSAVE_XCR0_LO] |
