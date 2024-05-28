@@ -438,6 +438,45 @@ static int setup_td_guest_attributes(X86CPU *x86cpu, Error **errp)
     return tdx_validate_attributes(tdx_guest, errp);
 }
 
+static struct kvm_tdx_cpuid_config *tdx_find_cpuid_config(uint32_t leaf, uint32_t subleaf)
+{
+    int i;
+    struct kvm_tdx_cpuid_config *config;
+
+    for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
+        config = &tdx_caps->cpuid_configs[i];
+        if (config->leaf != leaf) {
+            continue;
+        }
+
+        if (config->sub_leaf == subleaf) {
+            return config;
+        }
+    }
+
+    return NULL;
+}
+
+static void tdx_filter_cpuid(struct kvm_cpuid2 *cpuids)
+{
+    int i;
+    struct kvm_cpuid_entry2 *e;
+    struct kvm_tdx_cpuid_config *config;
+
+    for (i = 0; i < cpuids->nent; i++) {
+        e = cpuids->entries + i;
+        config = tdx_find_cpuid_config(e->function, e->index);
+        if (!config) {
+            continue;
+        }
+
+        e->eax &= config->eax;
+        e->ebx &= config->ebx;
+        e->ecx &= config->ecx;
+        e->edx &= config->edx;
+    }
+}
+
 int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
@@ -534,6 +573,7 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
     }
 
     init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, 0);
+    tdx_filter_cpuid(&init_vm->cpuid);
 
     init_vm->attributes = tdx_guest->attributes;
     init_vm->xfam = env->features[FEAT_XSAVE_XCR0_LO] |
