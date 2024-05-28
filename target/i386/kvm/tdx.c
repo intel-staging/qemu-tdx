@@ -436,12 +436,10 @@ static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **er
 
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
 {
-    if (((tdx->attributes & tdx_caps->attrs_fixed0) | tdx_caps->attrs_fixed1) !=
-        tdx->attributes) {
+    if ((tdx->attributes & ~tdx_caps->supported_attrs)) {
             error_setg(errp, "Invalid attributes 0x%lx for TDX VM "
-                       "(fixed0 0x%llx, fixed1 0x%llx)",
-                       tdx->attributes, tdx_caps->attrs_fixed0,
-                       tdx_caps->attrs_fixed1);
+                       "(supported: 0x%llx)",
+                       tdx->attributes, tdx_caps->supported_attrs);
             return -1;
     }
 
