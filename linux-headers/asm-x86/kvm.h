@@ -999,6 +999,11 @@ struct kvm_tdx_init_vm {
 	struct kvm_cpuid2 cpuid;
 };
 
+struct kvm_tdx_init_vcpu {
+    __u64 rcx;
+    struct kvm_cpuid2 cpuid;
+};
+
 #define KVM_TDX_MEASURE_MEMORY_REGION   _BITULL(0)
 
 struct kvm_tdx_init_mem_region {
