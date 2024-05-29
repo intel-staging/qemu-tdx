@@ -20,6 +20,8 @@
 #ifndef I386_CPU_H
 #define I386_CPU_H
 
+#include <linux/kvm.h>
+
 #include "sysemu/tcg.h"
 #include "cpu-qom.h"
 #include "kvm/hyperv-proto.h"
@@ -30,6 +32,8 @@
 #include "qemu/timer.h"
 
 #define XEN_NR_VIRQS 24
+
+#define KVM_MAX_CPUID_ENTRIES  100
 
 #define KVM_HAVE_MCE_INJECTION 1
 
@@ -1970,6 +1974,11 @@ typedef struct CPUArchState {
 
     /* Bitmap of available CPU topology levels for this CPU. */
     DECLARE_BITMAP(avail_cpu_topo, CPU_TOPO_LEVEL_MAX);
+
+    struct {
+        struct kvm_cpuid2 cpuid;
+        struct kvm_cpuid_entry2 entries[KVM_MAX_CPUID_ENTRIES];
+    } cpuid_data;
 } CPUX86State;
 
 struct kvm_msrs;

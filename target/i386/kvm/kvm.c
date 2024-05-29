@@ -2296,9 +2296,14 @@ int kvm_arch_init_vcpu(CPUState *cs)
     cpuid_data.cpuid.nent = cpuid_i;
 
     cpuid_data.cpuid.padding = 0;
-    r = kvm_vcpu_ioctl(cs, KVM_SET_CPUID2, &cpuid_data);
-    if (r) {
-        goto fail;
+
+    if (is_tdx_vm()) {
+        memcpy(&env->cpuid_data, &cpuid_data, sizeof(cpuid_data));
+    } else {
+        r = kvm_vcpu_ioctl(cs, KVM_SET_CPUID2, &cpuid_data);
+        if (r) {
+            goto fail;
+        }
     }
     kvm_init_xsave(env);
 

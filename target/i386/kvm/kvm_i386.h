@@ -13,8 +13,6 @@
 
 #include "sysemu/kvm.h"
 
-#define KVM_MAX_CPUID_ENTRIES  100
-
 #ifdef CONFIG_KVM
 
 #define kvm_pit_in_kernel() \
