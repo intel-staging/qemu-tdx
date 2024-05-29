@@ -79,6 +79,10 @@ static int tdx_ioctl_internal(enum tdx_ioctl_level level, void *state,
         exit(1);
     }
 
+    if (r && tdx_cmd.error) {
+        printf("TDX ioctl %d return with %d tdx_cmd.errors %#llx\n",
+               cmd_id, r, tdx_cmd.error);
+    }
     return r;
 }
 
