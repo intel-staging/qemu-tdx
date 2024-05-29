@@ -253,19 +253,73 @@ static void tdx_init_ram_entries(void)
     tdx_guest->nr_ram_entries = j;
 }
 
+static int tdx_cpuid_check_mismatch(struct kvm_cpuid2 *expected, struct kvm_cpuid2 *actual)
+{
+    int i;
+    struct kvm_cpuid_entry2 *expected_e, *actual_e;
+
+    if (expected->nent != actual->nent) {
+        error_report("TDX: CPUID count mismatch! expected: %d, actual: %d",
+        expected->nent, actual->nent);
+        return 1;
+    }
+
+    for (i = 0; i < expected->nent; i++) {
+        expected_e = &expected->entries[i];
+        actual_e = &actual->entries[i];
+
+        if (memcmp(expected_e, actual_e, sizeof(struct kvm_cpuid_entry2))) {
+            error_report("TDX: CPUID value mismatch for leaf: 0x%x subleaf: 0x%x\n"
+                         "  expected: eax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x\n"
+                         "  actual:   eax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x",
+                         expected_e->function, expected_e->index,
+                         expected_e->eax, expected_e->ebx, expected_e->ecx, expected_e->edx,
+                         actual_e->eax, actual_e->ebx, actual_e->ecx, actual_e->edx);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void tdx_post_init_vcpus(void)
 {
     TdxFirmwareEntry *hob;
     CPUState *cpu;
     int r;
+    g_autofree struct kvm_tdx_init_vcpu *init_vcpu = NULL;
+
+    init_vcpu = g_malloc0(sizeof(struct kvm_tdx_init_vcpu) +
+                          sizeof(struct kvm_cpuid_entry2) * KVM_MAX_CPUID_ENTRIES);
 
     hob = tdx_get_hob_entry(tdx_guest);
     CPU_FOREACH(cpu) {
+        X86CPU *x86cpu = X86_CPU(cpu);
+        CPUX86State *env = &x86cpu->env;
+        struct kvm_cpuid_entry2 *stored, *entry;
+
         apic_force_x2apic(X86_CPU(cpu)->apic_state);
 
-        r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
+        init_vcpu->rcx = hob->address;
+
+        init_vcpu->cpuid.nent = env->cpuid_data.cpuid.nent;
+        for (int i = 0; i < init_vcpu->cpuid.nent; i++) {
+            stored = &env->cpuid_data.cpuid.entries[i];
+            entry = &init_vcpu->cpuid.entries[i];
+
+            memcpy(entry, stored, sizeof(struct kvm_cpuid_entry2));
+            init_vcpu->cpuid.entries[i].eax = 0xffffffff;
+            init_vcpu->cpuid.entries[i].ebx = 0xffffffff;
+            init_vcpu->cpuid.entries[i].ecx = 0xffffffff;
+            init_vcpu->cpuid.entries[i].edx = 0xffffffff;
+        }
+        r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, init_vcpu);
         if (r < 0) {
             error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
+            exit(1);
+        }
+
+        if (tdx_cpuid_check_mismatch(&env->cpuid_data.cpuid, &init_vcpu->cpuid)) {
             exit(1);
         }
     }
