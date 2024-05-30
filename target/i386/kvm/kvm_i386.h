@@ -25,6 +25,8 @@
 uint32_t kvm_x86_build_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
                              uint32_t cpuid_i);
 
+uint32_t kvm_x86_add_kvm_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
+                               uint32_t cpuid_i);
 #else
 
 #define kvm_pit_in_kernel()      0

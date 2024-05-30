@@ -2025,6 +2025,29 @@ full:
     abort();
 }
 
+uint32_t kvm_x86_add_kvm_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
+                               uint32_t cpuid_i)
+{
+    int kvm_base = KVM_CPUID_SIGNATURE;
+    struct kvm_cpuid_entry2 *c;
+    uint32_t signature[3];
+
+    memcpy(signature, "KVMKVMKVM\0\0\0", 12);
+    c = &entries[cpuid_i++];
+    c->function = KVM_CPUID_SIGNATURE | kvm_base;
+    c->eax = KVM_CPUID_FEATURES | kvm_base;
+    c->ebx = signature[0];
+    c->ecx = signature[1];
+    c->edx = signature[2];
+
+    c = &entries[cpuid_i++];
+    c->function = KVM_CPUID_FEATURES | kvm_base;
+    c->eax = env->features[FEAT_KVM];
+    c->edx = env->features[FEAT_KVM_HINTS];
+
+    return cpuid_i;
+}
+
 int kvm_arch_init_vcpu(CPUState *cs)
 {
     struct {
@@ -2180,18 +2203,7 @@ int kvm_arch_init_vcpu(CPUState *cs)
         abort();
 #endif
     } else if (cpu->expose_kvm) {
-        memcpy(signature, "KVMKVMKVM\0\0\0", 12);
-        c = &cpuid_data.entries[cpuid_i++];
-        c->function = KVM_CPUID_SIGNATURE | kvm_base;
-        c->eax = KVM_CPUID_FEATURES | kvm_base;
-        c->ebx = signature[0];
-        c->ecx = signature[1];
-        c->edx = signature[2];
-
-        c = &cpuid_data.entries[cpuid_i++];
-        c->function = KVM_CPUID_FEATURES | kvm_base;
-        c->eax = env->features[FEAT_KVM];
-        c->edx = env->features[FEAT_KVM_HINTS];
+        cpuid_i = kvm_x86_add_kvm_cpuid(env, cpuid_data.entries, cpuid_i);
     }
 
     if (cpu->kvm_pv_enforce_cpuid) {
