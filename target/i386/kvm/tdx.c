@@ -639,7 +639,10 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
         return r;
     }
 
-    init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, 0);
+    if (x86cpu->expose_kvm) {
+        init_vm->cpuid.nent = kvm_x86_add_kvm_cpuid(env, init_vm->cpuid.entries, 0);
+    }
+    init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, init_vm->cpuid.nent);
     tdx_filter_cpuid(&init_vm->cpuid);
 
     init_vm->attributes = tdx_guest->attributes;
