@@ -317,11 +317,14 @@ static void tdx_post_init_vcpus(void)
             init_vcpu->cpuid.entries[i].ecx = 0xffffffff;
             init_vcpu->cpuid.entries[i].edx = 0xffffffff;
         }
+        pr_cpuid_entries("before KVM_TDX_INIT_VCPU the passed in CPUIDs:", &init_vcpu->cpuid);
         r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, init_vcpu);
         if (r < 0) {
             error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
             exit(1);
         }
+
+        pr_cpuid_entries("CPUID data returned from KVM after KVM_TDX_INIT_VCPU:", &init_vcpu->cpuid);
 
         if (tdx_cpuid_check_mismatch(&env->cpuid_data.cpuid, &init_vcpu->cpuid)) {
             exit(1);
