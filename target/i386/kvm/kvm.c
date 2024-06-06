@@ -2357,7 +2357,9 @@ void kvm_arch_reset_vcpu(X86CPU *cpu)
 
     kvm_init_nested_state(env);
 
-    sev_es_set_reset_vector(CPU(cpu));
+    if (sev_es_enabled()) {
+        sev_es_set_reset_vector(CPU(cpu));
+    }
 }
 
 void kvm_arch_after_reset_vcpu(X86CPU *cpu)
