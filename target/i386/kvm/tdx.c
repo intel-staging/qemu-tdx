@@ -547,6 +547,10 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
     init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, 0);
 
     init_vm->attributes = tdx_guest->attributes;
+    init_vm->xfam = env->features[FEAT_XSAVE_XCR0_LO] |
+                    env->features[FEAT_XSAVE_XCR0_HI] |
+                    env->features[FEAT_XSAVE_XSS_LO] |
+                    env->features[FEAT_XSAVE_XSS_HI];
 
     do {
         r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, init_vm);
