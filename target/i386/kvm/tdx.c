@@ -464,6 +464,26 @@ static int setup_td_guest_attributes(X86CPU *x86cpu, Error **errp)
     return tdx_validate_attributes(tdx_guest, errp);
 }
 
+static int setup_td_xfam(X86CPU *x86cpu, Error **errp)
+{
+    CPUX86State *env = &x86cpu->env;
+    uint64_t xfam;
+
+    xfam = env->features[FEAT_XSAVE_XCR0_LO] |
+           env->features[FEAT_XSAVE_XCR0_HI] |
+           env->features[FEAT_XSAVE_XSS_LO] |
+           env->features[FEAT_XSAVE_XSS_HI];
+
+    if (xfam & ~tdx_caps->supported_xfam) {
+        error_setg(errp, "Invalid XFAM 0x%lx for TDX VM (supported: 0x%llx))",
+                   xfam, tdx_caps->supported_xfam);
+        return -1;
+    }
+
+    tdx_guest->xfam = xfam;
+    return 0;
+}
+
 int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
 {
     X86CPU *x86cpu = X86_CPU(cpu);
@@ -552,8 +572,14 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp)
         return r;
     }
 
+    r = setup_td_xfam(x86cpu, errp);
+    if (r) {
+        return r;
+    }
+
     init_vm->cpuid.nent = kvm_x86_build_cpuid(env, init_vm->cpuid.entries, 0);
     init_vm->attributes = tdx_guest->attributes;
+    init_vm->xfam = tdx_guest->xfam;
 
     do {
         r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, init_vm);
