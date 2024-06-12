@@ -16,6 +16,7 @@ system_ss.add(files(
   'dirtylimit.c',
   'dma-helpers.c',
   'globals.c',
+  'guest-memfd-manager.c',
   'memory_mapping.c',
   'qdev-monitor.c',
   'qtest.c',
