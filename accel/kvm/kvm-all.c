@@ -48,6 +48,7 @@
 #include "kvm-cpus.h"
 #include "sysemu/dirtylimit.h"
 #include "qemu/range.h"
+#include "sysemu/guest-memfd-manager.h"
 
 #include "hw/boards.h"
 #include "sysemu/stats.h"
@@ -3079,6 +3080,9 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 
     addr = memory_region_get_ram_ptr(mr) + section.offset_within_region;
     rb = qemu_ram_block_from_host(addr, false, &offset);
+
+    guest_memfd_manager_state_change(GUEST_MEMFD_MANAGER(mr->rdm), offset,
+                                     size, to_private);
 
     if (to_private) {
         if (rb->page_size != qemu_real_host_page_size()) {
