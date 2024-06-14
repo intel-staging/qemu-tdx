@@ -46,4 +46,19 @@ struct GuestMemfdManagerClass {
                         bool shared_to_private);
 };
 
+static inline int guest_memfd_manager_state_change(GuestMemfdManager *gmm, uint64_t offset,
+                                                   uint64_t size, bool shared_to_private)
+{
+    GuestMemfdManagerClass *klass;
+
+    g_assert(gmm);
+    klass = GUEST_MEMFD_MANAGER_GET_CLASS(gmm);
+
+    if (klass->state_change) {
+        return klass->state_change(gmm, offset, size, shared_to_private);
+    }
+
+    return 0;
+}
+
 #endif
