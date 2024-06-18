@@ -234,6 +234,191 @@ static int memory_attribute_rdm_replay_discarded(const RamDiscardManager *rdm,
                                                        memory_attribute_rdm_replay_cb);
 }
 
+static bool memory_attribute_is_valid_range(MemoryAttributeManager *mgr,
+                                            uint64_t offset, uint64_t size)
+{
+    MemoryRegion *mr = mgr->mr;
+
+    g_assert(mr);
+
+    uint64_t region_size = memory_region_size(mr);
+    int block_size = memory_attribute_manager_get_block_size(mgr);
+
+    if (!QEMU_IS_ALIGNED(offset, block_size)) {
+        return false;
+    }
+    if (offset + size < offset || !size) {
+        return false;
+    }
+    if (offset >= region_size || offset + size > region_size) {
+        return false;
+    }
+    return true;
+}
+
+static void memory_attribute_notify_discard(MemoryAttributeManager *mgr,
+                                            uint64_t offset, uint64_t size)
+{
+    RamDiscardListener *rdl;
+
+    QLIST_FOREACH(rdl, &mgr->rdl_list, next) {
+        MemoryRegionSection tmp = *rdl->section;
+
+        if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+            continue;
+        }
+        rdl->notify_discard(rdl, &tmp);
+    }
+}
+
+static int memory_attribute_notify_populate(MemoryAttributeManager *mgr,
+                                            uint64_t offset, uint64_t size)
+{
+    RamDiscardListener *rdl, *rdl2;
+    int ret = 0;
+
+    QLIST_FOREACH(rdl, &mgr->rdl_list, next) {
+        MemoryRegionSection tmp = *rdl->section;
+
+        if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+            continue;
+        }
+        ret = rdl->notify_populate(rdl, &tmp);
+        if (ret) {
+            break;
+        }
+    }
+
+    if (ret) {
+        /* Notify all already-notified listeners. */
+        QLIST_FOREACH(rdl2, &mgr->rdl_list, next) {
+            MemoryRegionSection tmp = *rdl2->section;
+
+            if (rdl2 == rdl) {
+                break;
+            }
+            if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+                continue;
+            }
+            rdl2->notify_discard(rdl2, &tmp);
+        }
+    }
+    return ret;
+}
+
+static bool memory_attribute_is_range_populated(MemoryAttributeManager *mgr,
+                                                uint64_t offset, uint64_t size)
+{
+    const int block_size = memory_attribute_manager_get_block_size(mgr);
+    const unsigned long first_bit = offset / block_size;
+    const unsigned long last_bit = first_bit + (size / block_size) - 1;
+    unsigned long found_bit;
+
+    /* We fake a shorter bitmap to avoid searching too far. */
+    found_bit = find_next_zero_bit(mgr->shared_bitmap, last_bit + 1, first_bit);
+    return found_bit > last_bit;
+}
+
+static bool memory_attribute_is_range_discarded(MemoryAttributeManager *mgr,
+                                                uint64_t offset, uint64_t size)
+{
+    const int block_size = memory_attribute_manager_get_block_size(mgr);
+    const unsigned long first_bit = offset / block_size;
+    const unsigned long last_bit = first_bit + (size / block_size) - 1;
+    unsigned long found_bit;
+
+    /* We fake a shorter bitmap to avoid searching too far. */
+    found_bit = find_next_bit(mgr->shared_bitmap, last_bit + 1, first_bit);
+    return found_bit > last_bit;
+}
+
+static int memory_attribute_state_change(MemoryAttributeManager *mgr, uint64_t offset,
+                                         uint64_t size, bool to_private)
+{
+    const int block_size = memory_attribute_manager_get_block_size(mgr);
+    const unsigned long first_bit = offset / block_size;
+    const unsigned long nbits = size / block_size;
+    const uint64_t end = offset + size;
+    unsigned long bit;
+    uint64_t cur;
+    int ret = 0;
+
+    if (!memory_attribute_is_valid_range(mgr, offset, size)) {
+        error_report("%s, invalid range: offset 0x%lx, size 0x%lx",
+                     __func__, offset, size);
+        return -1;
+    }
+
+    if (to_private) {
+        if (memory_attribute_is_range_discarded(mgr, offset, size)) {
+            /* Already private */
+        } else if (!memory_attribute_is_range_populated(mgr, offset, size)) {
+            /* Unexpected mixture: process individual blocks */
+            for (cur = offset; cur < end; cur += block_size) {
+                bit = cur / block_size;
+                if (!test_bit(bit, mgr->shared_bitmap)) {
+                    continue;
+                }
+                clear_bit(bit, mgr->shared_bitmap);
+                memory_attribute_notify_discard(mgr, cur, block_size);
+            }
+        } else {
+            /* Completely shared */
+            bitmap_clear(mgr->shared_bitmap, first_bit, nbits);
+            memory_attribute_notify_discard(mgr, offset, size);
+        }
+    } else {
+        if (memory_attribute_is_range_populated(mgr, offset, size)) {
+            /* Already shared */
+        } else if (!memory_attribute_is_range_discarded(mgr, offset, size)) {
+            /* Unexpected mixture: process individual blocks */
+            unsigned long *modified_bitmap = bitmap_new(nbits);
+
+            for (cur = offset; cur < end; cur += block_size) {
+                bit = cur / block_size;
+                if (test_bit(bit, mgr->shared_bitmap)) {
+                    continue;
+                }
+                set_bit(bit, mgr->shared_bitmap);
+                ret = memory_attribute_notify_populate(mgr, cur, block_size);
+                if (!ret) {
+                    set_bit(bit - first_bit, modified_bitmap);
+                    continue;
+                }
+                clear_bit(bit, mgr->shared_bitmap);
+                break;
+            }
+
+            if (ret) {
+                /*
+                 * Very unexpected: something went wrong. Revert to the old
+                 * state, marking only the blocks as private that we converted
+                 * to shared.
+                 */
+                for (cur = offset; cur < end; cur += block_size) {
+                    bit = cur / block_size;
+                    if (!test_bit(bit - first_bit, modified_bitmap)) {
+                        continue;
+                    }
+                    assert(test_bit(bit, mgr->shared_bitmap));
+                    clear_bit(bit, mgr->shared_bitmap);
+                    memory_attribute_notify_discard(mgr, cur, block_size);
+                }
+            }
+            g_free(modified_bitmap);
+        } else {
+            /* Complete private */
+            bitmap_set(mgr->shared_bitmap, first_bit, nbits);
+            ret = memory_attribute_notify_populate(mgr, offset, size);
+            if (ret) {
+                bitmap_clear(mgr->shared_bitmap, first_bit, nbits);
+            }
+        }
+    }
+
+    return ret;
+}
+
 int memory_attribute_manager_realize(MemoryAttributeManager *mgr, MemoryRegion *mr)
 {
     uint64_t shared_bitmap_size;
@@ -272,7 +457,10 @@ static void memory_attribute_manager_finalize(Object *obj)
 
 static void memory_attribute_manager_class_init(ObjectClass *oc, void *data)
 {
+    MemoryAttributeManagerClass *mamc = MEMORY_ATTRIBUTE_MANAGER_CLASS(oc);
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_CLASS(oc);
+
+    mamc->state_change = memory_attribute_state_change;
 
     rdmc->get_min_granularity = memory_attribute_rdm_get_min_granularity;
     rdmc->register_listener = memory_attribute_rdm_register_listener;
