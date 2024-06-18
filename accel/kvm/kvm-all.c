@@ -48,6 +48,7 @@
 #include "kvm-cpus.h"
 #include "system/dirtylimit.h"
 #include "qemu/range.h"
+#include "system/memory-attribute-manager.h"
 
 #include "hw/boards.h"
 #include "system/stats.h"
@@ -3010,6 +3011,25 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
+typedef struct SetMemoryAttribute {
+    bool to_private;
+} SetMemoryAttribute;
+
+static int kvm_set_memory_attributes_cb(MemoryRegionSection *section,
+                                        void *opaque)
+{
+    hwaddr start = section->offset_within_address_space;
+    hwaddr size = section->size;
+    SetMemoryAttribute *args = opaque;
+    bool to_private = args->to_private;
+
+    if (to_private) {
+        return kvm_set_memory_attributes_private(start, size);
+    } else {
+        return kvm_set_memory_attributes_shared(start, size);
+    }
+}
+
 int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 {
     MemoryRegionSection section;
@@ -3018,6 +3038,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
     RAMBlock *rb;
     void *addr;
     int ret = -EINVAL;
+    SetMemoryAttribute args = { .to_private = to_private };
 
     trace_kvm_convert_memory(start, size, to_private ? "shared_to_private" : "private_to_shared");
 
@@ -3069,9 +3090,13 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
     }
 
     if (to_private) {
-        ret = kvm_set_memory_attributes_private(start, size);
+        ret = ram_discard_manager_replay_populated(mr->rdm, &section,
+                                                   kvm_set_memory_attributes_cb,
+                                                   &args);
     } else {
-        ret = kvm_set_memory_attributes_shared(start, size);
+        ret = ram_discard_manager_replay_discarded(mr->rdm, &section,
+                                                   kvm_set_memory_attributes_cb,
+                                                   &args);
     }
     if (ret) {
         goto out_unref;
@@ -3079,6 +3104,27 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 
     addr = memory_region_get_ram_ptr(mr) + section.offset_within_region;
     rb = qemu_ram_block_from_host(addr, false, &offset);
+
+    ret = memory_attribute_manager_state_change(MEMORY_ATTRIBUTE_MANAGER(mr->rdm),
+                                                offset, size, to_private);
+    if (ret) {
+        warn_report("Failed to notify the listener the state change of "
+                    "(0x%"HWADDR_PRIx" + 0x%"HWADDR_PRIx") to %s",
+                    start, size, to_private ? "private" : "shared");
+        args.to_private = !to_private;
+        if (to_private) {
+            ret = ram_discard_manager_replay_populated(mr->rdm, &section,
+                                                       kvm_set_memory_attributes_cb,
+                                                       &args);
+        } else {
+            ret = ram_discard_manager_replay_discarded(mr->rdm, &section,
+                                                       kvm_set_memory_attributes_cb,
+                                                       &args);
+        }
+        if (ret) {
+            goto out_unref;
+        }
+    }
 
     if (to_private) {
         if (rb->page_size != qemu_real_host_page_size()) {
