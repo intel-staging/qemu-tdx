@@ -23,6 +23,7 @@
 #include "cpu-common.h"
 #include "qemu/rcu.h"
 #include "exec/ramlist.h"
+#include "system/memory-attribute-manager.h"
 
 struct RAMBlock {
     struct rcu_head rcu;
@@ -42,6 +43,7 @@ struct RAMBlock {
     int fd;
     uint64_t fd_offset;
     int guest_memfd;
+    MemoryAttributeManager *memory_attribute_manager;
     size_t page_size;
     /* dirty bitmap used during migration */
     unsigned long *bmap;
