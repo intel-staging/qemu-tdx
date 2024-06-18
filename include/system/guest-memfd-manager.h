@@ -41,6 +41,9 @@ struct GuestMemfdManager {
 
 struct GuestMemfdManagerClass {
     ObjectClass parent_class;
+
+    int (*state_change)(GuestMemfdManager *gmm, uint64_t offset, uint64_t size,
+                        bool shared_to_private);
 };
 
 #endif

@@ -225,6 +225,147 @@ static void guest_memfd_rdm_replay_discarded(const RamDiscardManager *rdm,
                                            guest_memfd_rdm_replay_discarded_cb);
 }
 
+static bool guest_memfd_is_valid_range(GuestMemfdManager *gmm,
+                                       uint64_t offset, uint64_t size)
+{
+    MemoryRegion *mr = gmm->mr;
+
+    g_assert(mr);
+
+    uint64_t region_size = memory_region_size(mr);
+    if (!QEMU_IS_ALIGNED(offset, gmm->block_size)) {
+        return false;
+    }
+    if (offset + size < offset || !size) {
+        return false;
+    }
+    if (offset >= region_size || offset + size > region_size) {
+        return false;
+    }
+    return true;
+}
+
+static void guest_memfd_notify_discard(GuestMemfdManager *gmm,
+                                       uint64_t offset, uint64_t size)
+{
+    RamDiscardListener *rdl;
+
+    QLIST_FOREACH(rdl, &gmm->rdl_list, next) {
+        MemoryRegionSection tmp = *rdl->section;
+
+        if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+            continue;
+        }
+
+        guest_memfd_for_each_populated_section(gmm, &tmp, rdl,
+                                               guest_memfd_notify_discard_cb);
+    }
+}
+
+
+static int guest_memfd_notify_populate(GuestMemfdManager *gmm,
+                                       uint64_t offset, uint64_t size)
+{
+    RamDiscardListener *rdl, *rdl2;
+    int ret = 0;
+
+    QLIST_FOREACH(rdl, &gmm->rdl_list, next) {
+        MemoryRegionSection tmp = *rdl->section;
+
+        if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+            continue;
+        }
+
+        ret = guest_memfd_for_each_discarded_section(gmm, &tmp, rdl,
+                                                     guest_memfd_notify_populate_cb);
+        if (ret) {
+            break;
+        }
+    }
+
+    if (ret) {
+        /* Notify all already-notified listeners. */
+        QLIST_FOREACH(rdl2, &gmm->rdl_list, next) {
+            MemoryRegionSection tmp = *rdl2->section;
+
+            if (rdl2 == rdl) {
+                break;
+            }
+            if (!memory_region_section_intersect_range(&tmp, offset, size)) {
+                continue;
+            }
+
+            guest_memfd_for_each_discarded_section(gmm, &tmp, rdl2,
+                                                   guest_memfd_notify_discard_cb);
+        }
+    }
+    return ret;
+}
+
+static bool guest_memfd_is_range_populated(GuestMemfdManager *gmm,
+                                           uint64_t offset, uint64_t size)
+{
+    const unsigned long first_bit = offset / gmm->block_size;
+    const unsigned long last_bit = first_bit + (size / gmm->block_size) - 1;
+    unsigned long found_bit;
+
+    /* We fake a shorter bitmap to avoid searching too far. */
+    found_bit = find_next_zero_bit(gmm->bitmap, last_bit + 1, first_bit);
+    return found_bit > last_bit;
+}
+
+static bool guest_memfd_is_range_discarded(GuestMemfdManager *gmm,
+                                           uint64_t offset, uint64_t size)
+{
+    const unsigned long first_bit = offset / gmm->block_size;
+    const unsigned long last_bit = first_bit + (size / gmm->block_size) - 1;
+    unsigned long found_bit;
+
+    /* We fake a shorter bitmap to avoid searching too far. */
+    found_bit = find_next_bit(gmm->bitmap, last_bit + 1, first_bit);
+    return found_bit > last_bit;
+}
+
+static int guest_memfd_state_change(GuestMemfdManager *gmm, uint64_t offset,
+                                    uint64_t size, bool shared_to_private)
+{
+    int ret = 0;
+
+    if (!guest_memfd_is_valid_range(gmm, offset, size)) {
+        error_report("%s, invalid range: offset 0x%lx, size 0x%lx",
+                     __func__, offset, size);
+        return -1;
+    }
+
+    if ((shared_to_private && guest_memfd_is_range_discarded(gmm, offset, size)) ||
+        (!shared_to_private && guest_memfd_is_range_populated(gmm, offset, size))) {
+        return 0;
+    }
+
+    if (shared_to_private) {
+        guest_memfd_notify_discard(gmm, offset, size);
+    } else {
+        ret = guest_memfd_notify_populate(gmm, offset, size);
+    }
+
+    if (!ret) {
+        unsigned long first_bit = offset / gmm->block_size;
+        unsigned long nbits = size / gmm->block_size;
+
+        g_assert((first_bit + nbits) <= gmm->bitmap_size);
+
+        if (shared_to_private) {
+            bitmap_clear(gmm->bitmap, first_bit, nbits);
+        } else {
+            bitmap_set(gmm->bitmap, first_bit, nbits);
+        }
+
+        return 0;
+    }
+
+    return ret;
+}
+
 static void guest_memfd_manager_init(Object *obj)
 {
     GuestMemfdManager *gmm = GUEST_MEMFD_MANAGER(obj);
@@ -239,7 +380,10 @@ static void guest_memfd_manager_finalize(Object *obj)
 
 static void guest_memfd_manager_class_init(ObjectClass *oc, void *data)
 {
+    GuestMemfdManagerClass *gmmc = GUEST_MEMFD_MANAGER_CLASS(oc);
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_CLASS(oc);
+
+    gmmc->state_change = guest_memfd_state_change;
 
     rdmc->get_min_granularity = guest_memfd_rdm_get_min_granularity;
     rdmc->register_listener = guest_memfd_rdm_register_listener;
