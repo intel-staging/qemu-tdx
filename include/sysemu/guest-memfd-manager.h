@@ -42,6 +42,8 @@ struct GuestMemfdManager {
 struct GuestMemfdManagerClass {
     ObjectClass parent_class;
 
+    void (*realize)(GuestMemfdManager *gmm, MemoryRegion *mr, uint64_t region_size);
+    void (*unrealize)(GuestMemfdManager *gmm);
     int (*state_change)(GuestMemfdManager *gmm, uint64_t offset, uint64_t size,
                         bool shared_to_private);
 };
@@ -59,6 +61,31 @@ static inline int guest_memfd_manager_state_change(GuestMemfdManager *gmm, uint6
     }
 
     return 0;
+}
+
+static inline void guest_memfd_manager_realize(GuestMemfdManager *gmm,
+                                              MemoryRegion *mr, uint64_t region_size)
+{
+    GuestMemfdManagerClass *klass;
+
+    g_assert(gmm);
+    klass = GUEST_MEMFD_MANAGER_GET_CLASS(gmm);
+
+    if (klass->realize) {
+        klass->realize(gmm, mr, region_size);
+    }
+}
+
+static inline void guest_memfd_manager_unrealize(GuestMemfdManager *gmm)
+{
+    GuestMemfdManagerClass *klass;
+
+    g_assert(gmm);
+    klass = GUEST_MEMFD_MANAGER_GET_CLASS(gmm);
+
+    if (klass->unrealize) {
+        klass->unrealize(gmm);
+    }
 }
 
 #endif
