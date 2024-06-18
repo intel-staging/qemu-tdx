@@ -396,6 +396,7 @@ static void guest_memfd_manager_init(Object *obj)
 
 static void guest_memfd_manager_finalize(Object *obj)
 {
+    g_free(GUEST_MEMFD_MANAGER(obj)->discard_bitmap);
 }
 
 static void guest_memfd_manager_class_init(ObjectClass *oc, void *data)
