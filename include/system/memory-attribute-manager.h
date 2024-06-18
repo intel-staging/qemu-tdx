@@ -34,7 +34,27 @@ struct MemoryAttributeManager {
 
 struct MemoryAttributeManagerClass {
     ObjectClass parent_class;
+
+    int (*state_change)(MemoryAttributeManager *mgr, uint64_t offset, uint64_t size,
+                        bool shared_to_private);
 };
+
+static inline int memory_attribute_manager_state_change(MemoryAttributeManager *mgr, uint64_t offset,
+                                                        uint64_t size, bool shared_to_private)
+{
+    MemoryAttributeManagerClass *klass;
+
+    if (mgr == NULL) {
+        return 0;
+    }
+
+    klass = MEMORY_ATTRIBUTE_MANAGER_GET_CLASS(mgr);
+    if (klass->state_change) {
+        return klass->state_change(mgr, offset, size, shared_to_private);
+    }
+
+    return 0;
+}
 
 int memory_attribute_manager_realize(MemoryAttributeManager *mgr, MemoryRegion *mr);
 void memory_attribute_manager_unrealize(MemoryAttributeManager *mgr);
