@@ -366,6 +366,31 @@ static int guest_memfd_state_change(GuestMemfdManager *gmm, uint64_t offset,
     return ret;
 }
 
+static void guest_memfd_manager_realizefn(GuestMemfdManager *gmm, MemoryRegion *mr,
+                                          uint64_t region_size)
+{
+    uint64_t bitmap_size;
+
+    gmm->block_size = qemu_real_host_page_size();
+    bitmap_size = ROUND_UP(region_size, gmm->block_size) / gmm->block_size;
+
+    gmm->mr = mr;
+    gmm->bitmap_size = bitmap_size;
+    gmm->bitmap = bitmap_new(bitmap_size);
+
+    memory_region_set_ram_discard_manager(gmm->mr, RAM_DISCARD_MANAGER(gmm));
+}
+
+static void guest_memfd_manager_unrealizefn(GuestMemfdManager *gmm)
+{
+    memory_region_set_ram_discard_manager(gmm->mr, NULL);
+
+    g_free(gmm->bitmap);
+    gmm->bitmap = NULL;
+    gmm->bitmap_size = 0;
+    gmm->mr = NULL;
+}
+
 static void guest_memfd_manager_init(Object *obj)
 {
     GuestMemfdManager *gmm = GUEST_MEMFD_MANAGER(obj);
@@ -375,7 +400,6 @@ static void guest_memfd_manager_init(Object *obj)
 
 static void guest_memfd_manager_finalize(Object *obj)
 {
-    g_free(GUEST_MEMFD_MANAGER(obj)->bitmap);
 }
 
 static void guest_memfd_manager_class_init(ObjectClass *oc, void *data)
@@ -384,6 +408,8 @@ static void guest_memfd_manager_class_init(ObjectClass *oc, void *data)
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_CLASS(oc);
 
     gmmc->state_change = guest_memfd_state_change;
+    gmmc->realize = guest_memfd_manager_realizefn;
+    gmmc->unrealize = guest_memfd_manager_unrealizefn;
 
     rdmc->get_min_granularity = guest_memfd_rdm_get_min_granularity;
     rdmc->register_listener = guest_memfd_rdm_register_listener;
