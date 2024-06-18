@@ -37,4 +37,7 @@ struct GuestMemfdManager {
     QLIST_HEAD(, RamDiscardListener) rdl_list;
 };
 
+int guest_memfd_state_change(GuestMemfdManager *gmm, uint64_t offset, uint64_t size,
+                             bool shared_to_private);
+
 #endif
