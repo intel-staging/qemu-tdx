@@ -56,6 +56,7 @@
 #include "system/hostmem.h"
 #include "system/hw_accel.h"
 #include "system/xen-mapcache.h"
+#include "system/memory-attribute-manager.h"
 #include "trace.h"
 
 #ifdef CONFIG_FALLOCATE_PUNCH_HOLE
@@ -1908,6 +1909,16 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
             goto out_free;
         }
 
+        new_block->memory_attribute_manager = MEMORY_ATTRIBUTE_MANAGER(object_new(TYPE_MEMORY_ATTRIBUTE_MANAGER));
+        if (memory_attribute_manager_realize(new_block->memory_attribute_manager, new_block->mr)) {
+            error_setg(errp, "Failed to realize memory attribute manager");
+            object_unref(OBJECT(new_block->memory_attribute_manager));
+            close(new_block->guest_memfd);
+            ram_block_discard_require(false);
+            qemu_mutex_unlock_ramlist();
+            goto out_free;
+        }
+
         error_setg(&new_block->cpr_blocker,
                    "Memory region %s uses guest_memfd, "
                    "which is not supported with CPR.",
@@ -2258,6 +2269,8 @@ static void reclaim_ramblock(RAMBlock *block)
     }
 
     if (block->guest_memfd >= 0) {
+        memory_attribute_manager_unrealize(block->memory_attribute_manager);
+        object_unref(OBJECT(block->memory_attribute_manager));
         close(block->guest_memfd);
         ram_block_discard_require(false);
     }
