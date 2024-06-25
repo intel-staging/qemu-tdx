@@ -1905,6 +1905,7 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
         g_assert(new_block->mr);
         gmm->discard_bitmap_size = ROUND_UP(new_block->mr->size, gmm->block_size) / gmm->block_size;
         gmm->discard_bitmap = bitmap_new(gmm->discard_bitmap_size);
+        bitmap_fill(gmm->discard_bitmap, gmm->discard_bitmap_size);
         gmm->mr = new_block->mr;
         memory_region_set_ram_discard_manager(gmm->mr, RAM_DISCARD_MANAGER(gmm));
     }
