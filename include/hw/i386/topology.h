@@ -207,13 +207,4 @@ static inline apic_id_t x86_apicid_from_cpu_idx(X86CPUTopoInfo *topo_info,
     return x86_apicid_from_topo_ids(topo_info, &topo_ids);
 }
 
-/*
- * Check whether there's extended topology level (module or die)?
- */
-static inline bool x86_has_extended_topo(unsigned long *topo_bitmap)
-{
-    return test_bit(CPU_TOPO_LEVEL_MODULE, topo_bitmap) ||
-           test_bit(CPU_TOPO_LEVEL_DIE, topo_bitmap);
-}
-
 #endif /* HW_I386_TOPOLOGY_H */
