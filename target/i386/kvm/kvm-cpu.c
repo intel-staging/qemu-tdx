@@ -85,6 +85,10 @@ static bool kvm_cpu_realizefn(CPUState *cs, Error **errp)
         kvm_set_guest_phys_bits(cs);
     }
 
+    if (is_tdx_vm()) {
+        cpu->enable_cpuid_0x1f = true;
+    }
+
     return true;
 }
 
