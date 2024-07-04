@@ -508,9 +508,11 @@ struct IOMMUMemoryRegionClass {
 
 typedef struct RamDiscardListener RamDiscardListener;
 typedef int (*NotifyRamPopulate)(RamDiscardListener *rdl,
-                                 MemoryRegionSection *section);
+                                 MemoryRegionSection *section,
+                                 bool is_private);
 typedef void (*NotifyRamDiscard)(RamDiscardListener *rdl,
-                                 MemoryRegionSection *section);
+                                 MemoryRegionSection *section,
+                                 bool is_private);
 
 struct RamDiscardListener {
     /*
@@ -566,8 +568,8 @@ static inline void ram_discard_listener_init(RamDiscardListener *rdl,
     rdl->double_discard_supported = double_discard_supported;
 }
 
-typedef int (*ReplayRamPopulate)(MemoryRegionSection *section, void *opaque);
-typedef void (*ReplayRamDiscard)(MemoryRegionSection *section, void *opaque);
+typedef int (*ReplayRamPopulate)(MemoryRegionSection *section, bool is_private, void *opaque);
+typedef void (*ReplayRamDiscard)(MemoryRegionSection *section, bool is_private, void *opaque);
 
 /*
  * RamDiscardManagerClass:
@@ -632,11 +634,13 @@ struct RamDiscardManagerClass {
      *
      * @rdm: the #RamDiscardManager
      * @section: the #MemoryRegionSection
+     * @is_private: the attribute of the request section
      *
      * Returns whether the given range is completely populated.
      */
     bool (*is_populated)(const RamDiscardManager *rdm,
-                         const MemoryRegionSection *section);
+                         const MemoryRegionSection *section,
+                         bool is_private);
 
     /**
      * @replay_populated:
@@ -648,6 +652,7 @@ struct RamDiscardManagerClass {
      *
      * @rdm: the #RamDiscardManager
      * @section: the #MemoryRegionSection
+     * @is_private: the attribute of the populated parts
      * @replay_fn: the #ReplayRamPopulate callback
      * @opaque: pointer to forward to the callback
      *
@@ -655,6 +660,7 @@ struct RamDiscardManagerClass {
      */
     int (*replay_populated)(const RamDiscardManager *rdm,
                             MemoryRegionSection *section,
+                            bool is_private,
                             ReplayRamPopulate replay_fn, void *opaque);
 
     /**
@@ -665,11 +671,13 @@ struct RamDiscardManagerClass {
      *
      * @rdm: the #RamDiscardManager
      * @section: the #MemoryRegionSection
+     * @is_private: the attribute of the discarded parts
      * @replay_fn: the #ReplayRamDiscard callback
      * @opaque: pointer to forward to the callback
      */
     void (*replay_discarded)(const RamDiscardManager *rdm,
                              MemoryRegionSection *section,
+                             bool is_private,
                              ReplayRamDiscard replay_fn, void *opaque);
 
     /**
@@ -709,15 +717,18 @@ uint64_t ram_discard_manager_get_min_granularity(const RamDiscardManager *rdm,
                                                  const MemoryRegion *mr);
 
 bool ram_discard_manager_is_populated(const RamDiscardManager *rdm,
-                                      const MemoryRegionSection *section);
+                                      const MemoryRegionSection *section,
+                                      bool is_private);
 
 int ram_discard_manager_replay_populated(const RamDiscardManager *rdm,
                                          MemoryRegionSection *section,
+                                         bool is_private,
                                          ReplayRamPopulate replay_fn,
                                          void *opaque);
 
 void ram_discard_manager_replay_discarded(const RamDiscardManager *rdm,
                                           MemoryRegionSection *section,
+                                          bool is_private,
                                           ReplayRamDiscard replay_fn,
                                           void *opaque);
 

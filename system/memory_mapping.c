@@ -249,7 +249,7 @@ static void guest_phys_block_add_section(GuestPhysListener *g,
 }
 
 static int guest_phys_ram_populate_cb(MemoryRegionSection *section,
-                                      void *opaque)
+                                      bool is_private, void *opaque)
 {
     GuestPhysListener *g = opaque;
 
@@ -274,7 +274,7 @@ static void guest_phys_blocks_region_add(MemoryListener *listener,
         RamDiscardManager *rdm;
 
         rdm = memory_region_get_ram_discard_manager(section->mr);
-        ram_discard_manager_replay_populated(rdm, section,
+        ram_discard_manager_replay_populated(rdm, section, false,
                                              guest_phys_ram_populate_cb, g);
         return;
     }
