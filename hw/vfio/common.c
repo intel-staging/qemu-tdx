@@ -345,7 +345,8 @@ out:
 }
 
 static void vfio_ram_discard_notify_discard(RamDiscardListener *rdl,
-                                            MemoryRegionSection *section)
+                                            MemoryRegionSection *section,
+                                            bool is_private)
 {
     VFIORamDiscardListener *vrdl = container_of(rdl, VFIORamDiscardListener,
                                                 listener);
@@ -353,6 +354,11 @@ static void vfio_ram_discard_notify_discard(RamDiscardListener *rdl,
     const hwaddr size = int128_get64(section->size);
     const hwaddr iova = section->offset_within_address_space;
     int ret;
+
+    if (is_private) {
+        /* Not support discard private memory yet. */
+        return;
+    }
 
     /* Unmap with a single call. */
     ret = vfio_container_dma_unmap(bcontainer, iova, size , NULL);
@@ -363,7 +369,8 @@ static void vfio_ram_discard_notify_discard(RamDiscardListener *rdl,
 }
 
 static int vfio_ram_discard_notify_populate(RamDiscardListener *rdl,
-                                            MemoryRegionSection *section)
+                                            MemoryRegionSection *section,
+                                            bool is_private)
 {
     VFIORamDiscardListener *vrdl = container_of(rdl, VFIORamDiscardListener,
                                                 listener);
@@ -373,6 +380,11 @@ static int vfio_ram_discard_notify_populate(RamDiscardListener *rdl,
     hwaddr start, next, iova;
     void *vaddr;
     int ret;
+
+    if (is_private) {
+        /* Not support discard private memory yet. */
+        return 0;
+    }
 
     /*
      * Map in (aligned within memory region) minimum granularity, so we can
@@ -390,7 +402,7 @@ static int vfio_ram_discard_notify_populate(RamDiscardListener *rdl,
                                      vaddr, section->readonly);
         if (ret) {
             /* Rollback */
-            vfio_ram_discard_notify_discard(rdl, section);
+            vfio_ram_discard_notify_discard(rdl, section, false);
             return ret;
         }
     }
@@ -1248,7 +1260,7 @@ out:
 }
 
 static int vfio_ram_discard_get_dirty_bitmap(MemoryRegionSection *section,
-                                             void *opaque)
+                                             bool is_private, void *opaque)
 {
     const hwaddr size = int128_get64(section->size);
     const hwaddr iova = section->offset_within_address_space;
@@ -1293,7 +1305,7 @@ vfio_sync_ram_discard_listener_dirty_bitmap(VFIOContainerBase *bcontainer,
      * We only want/can synchronize the bitmap for actually mapped parts -
      * which correspond to populated parts. Replay all populated parts.
      */
-    return ram_discard_manager_replay_populated(rdm, section,
+    return ram_discard_manager_replay_populated(rdm, section, false,
                                               vfio_ram_discard_get_dirty_bitmap,
                                                 &vrdl);
 }

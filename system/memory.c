@@ -2133,34 +2133,37 @@ uint64_t ram_discard_manager_get_min_granularity(const RamDiscardManager *rdm,
 }
 
 bool ram_discard_manager_is_populated(const RamDiscardManager *rdm,
-                                      const MemoryRegionSection *section)
+                                      const MemoryRegionSection *section,
+                                      bool is_private)
 {
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_GET_CLASS(rdm);
 
     g_assert(rdmc->is_populated);
-    return rdmc->is_populated(rdm, section);
+    return rdmc->is_populated(rdm, section, is_private);
 }
 
 int ram_discard_manager_replay_populated(const RamDiscardManager *rdm,
                                          MemoryRegionSection *section,
+                                         bool is_private,
                                          ReplayRamPopulate replay_fn,
                                          void *opaque)
 {
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_GET_CLASS(rdm);
 
     g_assert(rdmc->replay_populated);
-    return rdmc->replay_populated(rdm, section, replay_fn, opaque);
+    return rdmc->replay_populated(rdm, section, is_private, replay_fn, opaque);
 }
 
 void ram_discard_manager_replay_discarded(const RamDiscardManager *rdm,
                                           MemoryRegionSection *section,
+                                          bool is_private,
                                           ReplayRamDiscard replay_fn,
                                           void *opaque)
 {
     RamDiscardManagerClass *rdmc = RAM_DISCARD_MANAGER_GET_CLASS(rdm);
 
     g_assert(rdmc->replay_discarded);
-    rdmc->replay_discarded(rdm, section, replay_fn, opaque);
+    rdmc->replay_discarded(rdm, section, is_private, replay_fn, opaque);
 }
 
 void ram_discard_manager_register_listener(RamDiscardManager *rdm,
@@ -2221,7 +2224,7 @@ bool memory_get_xlat_addr(IOMMUTLBEntry *iotlb, void **vaddr,
          * Disallow that. vmstate priorities make sure any RamDiscardManager
          * were already restored before IOMMUs are restored.
          */
-        if (!ram_discard_manager_is_populated(rdm, &tmp)) {
+        if (!ram_discard_manager_is_populated(rdm, &tmp, false)) {
             error_setg(errp, "iommu map to discarded memory (e.g., unplugged"
                          " via virtio-mem): %" HWADDR_PRIx "",
                          iotlb->translated_addr);

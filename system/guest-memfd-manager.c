@@ -23,39 +23,51 @@ OBJECT_DEFINE_SIMPLE_TYPE_WITH_INTERFACES(GuestMemfdManager,
                                           { })
 
 static bool guest_memfd_rdm_is_populated(const RamDiscardManager *rdm,
-                                         const MemoryRegionSection *section)
+                                         const MemoryRegionSection *section,
+                                         bool is_private)
 {
     const GuestMemfdManager *gmm = GUEST_MEMFD_MANAGER(rdm);
     uint64_t first_bit = section->offset_within_region / gmm->block_size;
     uint64_t last_bit = first_bit + int128_get64(section->size) / gmm->block_size - 1;
     unsigned long first_discard_bit;
 
-    first_discard_bit = find_next_zero_bit(gmm->bitmap, last_bit + 1, first_bit);
+    if (is_private) {
+        /* Check if the private section is populated */
+        first_discard_bit = find_next_bit(gmm->bitmap, last_bit + 1, first_bit);
+    } else {
+        /* Check if the shared section is populated */
+        first_discard_bit = find_next_zero_bit(gmm->bitmap, last_bit + 1, first_bit);
+    }
+
     return first_discard_bit > last_bit;
 }
 
-typedef int (*guest_memfd_section_cb)(MemoryRegionSection *s, void *arg);
+typedef int (*guest_memfd_section_cb)(MemoryRegionSection *s, bool is_private,
+                                      void *arg);
 
-static int guest_memfd_notify_populate_cb(MemoryRegionSection *section, void *arg)
+static int guest_memfd_notify_populate_cb(MemoryRegionSection *section, bool is_private,
+                                          void *arg)
 {
     RamDiscardListener *rdl = arg;
 
-    return rdl->notify_populate(rdl, section);
+    return rdl->notify_populate(rdl, section, is_private);
 }
 
-static int guest_memfd_notify_discard_cb(MemoryRegionSection *section, void *arg)
+static int guest_memfd_notify_discard_cb(MemoryRegionSection *section, bool is_private,
+                                         void *arg)
 {
     RamDiscardListener *rdl = arg;
 
-    rdl->notify_discard(rdl, section);
+    rdl->notify_discard(rdl, section, is_private);
 
     return 0;
 }
 
-static int guest_memfd_for_each_populated_section(const GuestMemfdManager *gmm,
-                                                  MemoryRegionSection *section,
-                                                  void *arg,
-                                                  guest_memfd_section_cb cb)
+static int guest_memfd_for_each_shared_section(const GuestMemfdManager *gmm,
+                                               MemoryRegionSection *section,
+                                               bool is_private,
+                                               void *arg,
+                                               guest_memfd_section_cb cb)
 {
     unsigned long first_one_bit, last_one_bit;
     uint64_t offset, size;
@@ -76,7 +88,7 @@ static int guest_memfd_for_each_populated_section(const GuestMemfdManager *gmm,
             break;
         }
 
-        ret = cb(&tmp, arg);
+        ret = cb(&tmp, is_private, arg);
         if (ret) {
             break;
         }
@@ -88,10 +100,11 @@ static int guest_memfd_for_each_populated_section(const GuestMemfdManager *gmm,
     return ret;
 }
 
-static int guest_memfd_for_each_discarded_section(const GuestMemfdManager *gmm,
-                                                  MemoryRegionSection *section,
-                                                  void *arg,
-                                                  guest_memfd_section_cb cb)
+static int guest_memfd_for_each_private_section(const GuestMemfdManager *gmm,
+                                                MemoryRegionSection *section,
+                                                bool is_private,
+                                                void *arg,
+                                                guest_memfd_section_cb cb)
 {
     unsigned long first_zero_bit, last_zero_bit;
     uint64_t offset, size;
@@ -113,7 +126,7 @@ static int guest_memfd_for_each_discarded_section(const GuestMemfdManager *gmm,
             break;
         }
 
-        ret = cb(&tmp, arg);
+        ret = cb(&tmp, is_private, arg);
         if (ret) {
             break;
         }
@@ -146,8 +159,9 @@ static void guest_memfd_rdm_register_listener(RamDiscardManager *rdm,
 
     QLIST_INSERT_HEAD(&gmm->rdl_list, rdl, next);
 
-    ret = guest_memfd_for_each_populated_section(gmm, section, rdl,
-                                                 guest_memfd_notify_populate_cb);
+    /* Populate shared part */
+    ret = guest_memfd_for_each_shared_section(gmm, section, false, rdl,
+                                              guest_memfd_notify_populate_cb);
     if (ret) {
         error_report("%s: Failed to register RAM discard listener: %s", __func__,
                      strerror(-ret));
@@ -163,8 +177,9 @@ static void guest_memfd_rdm_unregister_listener(RamDiscardManager *rdm,
     g_assert(rdl->section);
     g_assert(rdl->section->mr == gmm->mr);
 
-    ret = guest_memfd_for_each_populated_section(gmm, rdl->section, rdl,
-                                                 guest_memfd_notify_discard_cb);
+    /* Discard shared part */
+    ret = guest_memfd_for_each_shared_section(gmm, rdl->section, false, rdl,
+                                              guest_memfd_notify_discard_cb);
     if (ret) {
         error_report("%s: Failed to unregister RAM discard listener: %s", __func__,
                      strerror(-ret));
@@ -181,16 +196,18 @@ typedef struct GuestMemfdReplayData {
     void *opaque;
 } GuestMemfdReplayData;
 
-static int guest_memfd_rdm_replay_populated_cb(MemoryRegionSection *section, void *arg)
+static int guest_memfd_rdm_replay_populated_cb(MemoryRegionSection *section,
+                                               bool is_private, void *arg)
 {
     struct GuestMemfdReplayData *data = arg;
     ReplayRamPopulate replay_fn = data->fn;
 
-    return replay_fn(section, data->opaque);
+    return replay_fn(section, is_private, data->opaque);
 }
 
 static int guest_memfd_rdm_replay_populated(const RamDiscardManager *rdm,
                                             MemoryRegionSection *section,
+                                            bool is_private,
                                             ReplayRamPopulate replay_fn,
                                             void *opaque)
 {
@@ -198,22 +215,31 @@ static int guest_memfd_rdm_replay_populated(const RamDiscardManager *rdm,
     struct GuestMemfdReplayData data = { .fn = replay_fn, .opaque = opaque };
 
     g_assert(section->mr == gmm->mr);
-    return guest_memfd_for_each_populated_section(gmm, section, &data,
-                                                  guest_memfd_rdm_replay_populated_cb);
+    if (is_private) {
+        /* Replay populate on private section */
+        return guest_memfd_for_each_private_section(gmm, section, is_private, &data,
+                                                    guest_memfd_rdm_replay_populated_cb);
+    } else {
+        /* Replay populate on shared section */
+        return guest_memfd_for_each_shared_section(gmm, section, is_private, &data,
+                                                   guest_memfd_rdm_replay_populated_cb);
+    }
 }
 
-static int guest_memfd_rdm_replay_discarded_cb(MemoryRegionSection *section, void *arg)
+static int guest_memfd_rdm_replay_discarded_cb(MemoryRegionSection *section,
+                                               bool is_private, void *arg)
 {
     struct GuestMemfdReplayData *data = arg;
     ReplayRamDiscard replay_fn = data->fn;
 
-    replay_fn(section, data->opaque);
+    replay_fn(section, is_private, data->opaque);
 
     return 0;
 }
 
 static void guest_memfd_rdm_replay_discarded(const RamDiscardManager *rdm,
                                              MemoryRegionSection *section,
+                                             bool is_private,
                                              ReplayRamDiscard replay_fn,
                                              void *opaque)
 {
@@ -221,8 +247,16 @@ static void guest_memfd_rdm_replay_discarded(const RamDiscardManager *rdm,
     struct GuestMemfdReplayData data = { .fn = replay_fn, .opaque = opaque };
 
     g_assert(section->mr == gmm->mr);
-    guest_memfd_for_each_discarded_section(gmm, section, &data,
-                                           guest_memfd_rdm_replay_discarded_cb);
+
+    if (is_private) {
+        /* Replay discard on private section */
+        guest_memfd_for_each_private_section(gmm, section, is_private, &data,
+                                             guest_memfd_rdm_replay_discarded_cb);
+    } else {
+        /* Replay discard on shared section */
+        guest_memfd_for_each_shared_section(gmm, section, is_private, &data,
+                                            guest_memfd_rdm_replay_discarded_cb);
+    }
 }
 
 static bool guest_memfd_is_valid_range(GuestMemfdManager *gmm,
@@ -257,8 +291,9 @@ static void guest_memfd_notify_discard(GuestMemfdManager *gmm,
             continue;
         }
 
-        guest_memfd_for_each_populated_section(gmm, &tmp, rdl,
-                                               guest_memfd_notify_discard_cb);
+        /* For current shared section, notify to discard shared parts */
+        guest_memfd_for_each_shared_section(gmm, &tmp, false, rdl,
+                                            guest_memfd_notify_discard_cb);
     }
 }
 
@@ -276,8 +311,9 @@ static int guest_memfd_notify_populate(GuestMemfdManager *gmm,
             continue;
         }
 
-        ret = guest_memfd_for_each_discarded_section(gmm, &tmp, rdl,
-                                                     guest_memfd_notify_populate_cb);
+        /* For current private section, notify to populate the shared parts */
+        ret = guest_memfd_for_each_private_section(gmm, &tmp, false, rdl,
+                                                   guest_memfd_notify_populate_cb);
         if (ret) {
             break;
         }
@@ -295,8 +331,8 @@ static int guest_memfd_notify_populate(GuestMemfdManager *gmm,
                 continue;
             }
 
-            guest_memfd_for_each_discarded_section(gmm, &tmp, rdl2,
-                                                   guest_memfd_notify_discard_cb);
+            guest_memfd_for_each_private_section(gmm, &tmp, false, rdl2,
+                                                 guest_memfd_notify_discard_cb);
         }
     }
     return ret;

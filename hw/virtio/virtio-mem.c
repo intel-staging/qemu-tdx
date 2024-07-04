@@ -312,14 +312,14 @@ static int virtio_mem_notify_populate_cb(MemoryRegionSection *s, void *arg)
 {
     RamDiscardListener *rdl = arg;
 
-    return rdl->notify_populate(rdl, s);
+    return rdl->notify_populate(rdl, s, false);
 }
 
 static int virtio_mem_notify_discard_cb(MemoryRegionSection *s, void *arg)
 {
     RamDiscardListener *rdl = arg;
 
-    rdl->notify_discard(rdl, s);
+    rdl->notify_discard(rdl, s, false);
     return 0;
 }
 
@@ -334,7 +334,7 @@ static void virtio_mem_notify_unplug(VirtIOMEM *vmem, uint64_t offset,
         if (!memory_region_section_intersect_range(&tmp, offset, size)) {
             continue;
         }
-        rdl->notify_discard(rdl, &tmp);
+        rdl->notify_discard(rdl, &tmp, false);
     }
 }
 
@@ -350,7 +350,7 @@ static int virtio_mem_notify_plug(VirtIOMEM *vmem, uint64_t offset,
         if (!memory_region_section_intersect_range(&tmp, offset, size)) {
             continue;
         }
-        ret = rdl->notify_populate(rdl, &tmp);
+        ret = rdl->notify_populate(rdl, &tmp, false);
         if (ret) {
             break;
         }
@@ -367,7 +367,7 @@ static int virtio_mem_notify_plug(VirtIOMEM *vmem, uint64_t offset,
             if (!memory_region_section_intersect_range(&tmp, offset, size)) {
                 continue;
             }
-            rdl2->notify_discard(rdl2, &tmp);
+            rdl2->notify_discard(rdl2, &tmp, false);
         }
     }
     return ret;
@@ -383,7 +383,7 @@ static void virtio_mem_notify_unplug_all(VirtIOMEM *vmem)
 
     QLIST_FOREACH(rdl, &vmem->rdl_list, next) {
         if (rdl->double_discard_supported) {
-            rdl->notify_discard(rdl, rdl->section);
+            rdl->notify_discard(rdl, rdl->section, false);
         } else {
             virtio_mem_for_each_plugged_section(vmem, rdl->section, rdl,
                                                 virtio_mem_notify_discard_cb);
@@ -1685,7 +1685,8 @@ static uint64_t virtio_mem_rdm_get_min_granularity(const RamDiscardManager *rdm,
 }
 
 static bool virtio_mem_rdm_is_populated(const RamDiscardManager *rdm,
-                                        const MemoryRegionSection *s)
+                                        const MemoryRegionSection *s,
+                                        bool is_private)
 {
     const VirtIOMEM *vmem = VIRTIO_MEM(rdm);
     uint64_t start_gpa = vmem->addr + s->offset_within_region;
@@ -1712,11 +1713,12 @@ static int virtio_mem_rdm_replay_populated_cb(MemoryRegionSection *s, void *arg)
 {
     struct VirtIOMEMReplayData *data = arg;
 
-    return ((ReplayRamPopulate)data->fn)(s, data->opaque);
+    return ((ReplayRamPopulate)data->fn)(s, false, data->opaque);
 }
 
 static int virtio_mem_rdm_replay_populated(const RamDiscardManager *rdm,
                                            MemoryRegionSection *s,
+                                           bool is_private,
                                            ReplayRamPopulate replay_fn,
                                            void *opaque)
 {
@@ -1736,12 +1738,13 @@ static int virtio_mem_rdm_replay_discarded_cb(MemoryRegionSection *s,
 {
     struct VirtIOMEMReplayData *data = arg;
 
-    ((ReplayRamDiscard)data->fn)(s, data->opaque);
+    ((ReplayRamDiscard)data->fn)(s, false, data->opaque);
     return 0;
 }
 
 static void virtio_mem_rdm_replay_discarded(const RamDiscardManager *rdm,
                                             MemoryRegionSection *s,
+                                            bool is_private,
                                             ReplayRamDiscard replay_fn,
                                             void *opaque)
 {
@@ -1783,7 +1786,7 @@ static void virtio_mem_rdm_unregister_listener(RamDiscardManager *rdm,
     g_assert(rdl->section->mr == &vmem->memdev->mr);
     if (vmem->size) {
         if (rdl->double_discard_supported) {
-            rdl->notify_discard(rdl, rdl->section);
+            rdl->notify_discard(rdl, rdl->section, false);
         } else {
             virtio_mem_for_each_plugged_section(vmem, rdl->section, rdl,
                                                 virtio_mem_notify_discard_cb);

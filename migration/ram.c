@@ -838,7 +838,7 @@ static inline bool migration_bitmap_clear_dirty(RAMState *rs,
 }
 
 static void dirty_bitmap_clear_section(MemoryRegionSection *section,
-                                       void *opaque)
+                                       bool is_private, void *opaque)
 {
     const hwaddr offset = section->offset_within_region;
     const hwaddr size = int128_get64(section->size);
@@ -884,7 +884,7 @@ static uint64_t ramblock_dirty_bitmap_clear_discarded_pages(RAMBlock *rb)
             .size = int128_make64(qemu_ram_get_used_length(rb)),
         };
 
-        ram_discard_manager_replay_discarded(rdm, &section,
+        ram_discard_manager_replay_discarded(rdm, &section, false,
                                              dirty_bitmap_clear_section,
                                              &cleared_bits);
     }
@@ -907,7 +907,7 @@ bool ramblock_page_is_discarded(RAMBlock *rb, ram_addr_t start)
             .size = int128_make64(qemu_ram_pagesize(rb)),
         };
 
-        return !ram_discard_manager_is_populated(rdm, &section);
+        return !ram_discard_manager_is_populated(rdm, &section, false);
     }
     return false;
 }
@@ -1539,7 +1539,7 @@ static inline void populate_read_range(RAMBlock *block, ram_addr_t offset,
 }
 
 static inline int populate_read_section(MemoryRegionSection *section,
-                                        void *opaque)
+                                        bool is_private, void *opaque)
 {
     const hwaddr size = int128_get64(section->size);
     hwaddr offset = section->offset_within_region;
@@ -1579,7 +1579,7 @@ static void ram_block_populate_read(RAMBlock *rb)
             .size = rb->mr->size,
         };
 
-        ram_discard_manager_replay_populated(rdm, &section,
+        ram_discard_manager_replay_populated(rdm, &section, false,
                                              populate_read_section, NULL);
     } else {
         populate_read_range(rb, 0, rb->used_length);
@@ -1614,7 +1614,7 @@ void ram_write_tracking_prepare(void)
 }
 
 static inline int uffd_protect_section(MemoryRegionSection *section,
-                                       void *opaque)
+                                       bool is_private, void *opaque)
 {
     const hwaddr size = int128_get64(section->size);
     const hwaddr offset = section->offset_within_region;
@@ -1638,7 +1638,7 @@ static int ram_block_uffd_protect(RAMBlock *rb, int uffd_fd)
             .size = rb->mr->size,
         };
 
-        return ram_discard_manager_replay_populated(rdm, &section,
+        return ram_discard_manager_replay_populated(rdm, &section, false,
                                                     uffd_protect_section,
                                                     (void *)(uintptr_t)uffd_fd);
     }
