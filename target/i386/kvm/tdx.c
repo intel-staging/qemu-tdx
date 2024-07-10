@@ -34,6 +34,8 @@
 #include "tdx-quote-generator.h"
 #include "../cpu-internal.h"
 
+#include "standard-headers/asm-x86/kvm_para.h"
+
 #define TDX_MIN_TSC_FREQUENCY_KHZ   (100 * 1000)
 #define TDX_MAX_TSC_FREQUENCY_KHZ   (10 * 1000 * 1000)
 
@@ -41,6 +43,14 @@
 #define TDX_TD_ATTRIBUTES_SEPT_VE_DISABLE   BIT_ULL(28)
 #define TDX_TD_ATTRIBUTES_PKS               BIT_ULL(30)
 #define TDX_TD_ATTRIBUTES_PERFMON           BIT_ULL(63)
+
+#define TDX_SUPPORTED_KVM_FEATURES  ((1U << KVM_FEATURE_NOP_IO_DELAY) | \
+                                     (1U << KVM_FEATURE_PV_UNHALT) | \
+                                     (1U << KVM_FEATURE_PV_TLB_FLUSH) | \
+                                     (1U << KVM_FEATURE_PV_SEND_IPI) | \
+                                     (1U << KVM_FEATURE_POLL_CONTROL) | \
+                                     (1U << KVM_FEATURE_PV_SCHED_YIELD) | \
+                                     (1U << KVM_FEATURE_MSI_EXT_DEST_ID))
 
 static TdxGuest *tdx_guest;
 
@@ -418,6 +428,43 @@ static void tdx_cpu_post_init(X86ConfidentialGuest *cg, CPUState *cpu)
 
     x86cpu->enable_cpuid_0x1f = true;
     env->cpuid_level = 0x23;
+}
+static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
+                                        uint32_t feature, uint32_t index,
+                                        int reg, uint32_t value)
+{
+    switch(feature) {
+        case 0x1:
+            if (reg == R_ECX) {
+                value &= ~(CPUID_EXT_VMX | CPUID_EXT_SMX);
+            } else if (reg == R_EDX) {
+                value &= ~CPUID_PSE36;
+            }
+            break;
+        case 0x7:
+            if (reg == R_EBX) {
+                value &= ~(CPUID_7_0_EBX_TSC_ADJUST | CPUID_7_0_EBX_SGX);
+                // QEMU Intel PT support is broken
+                value &= ~CPUID_7_0_EBX_INTEL_PT;
+            } else if (reg == R_ECX) {
+                value &= ~CPUID_7_0_ECX_SGX_LC;
+            }
+            break;
+        case 0x40000001:
+            if (reg == R_EAX) {
+                value &= TDX_SUPPORTED_KVM_FEATURES;
+            }
+            break;
+        case 0x80000008:
+            if (reg == R_EBX) {
+                value &= CPUID_8000_0008_EBX_WBNOINVD;
+            }
+            break;
+        default:
+            return value;
+    }
+
+    return value;
 }
 
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
@@ -1117,4 +1164,5 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     klass->kvm_init = tdx_kvm_init;
     x86_klass->kvm_type = tdx_kvm_type;
     x86_klass->cpu_post_init = tdx_cpu_post_init;
+    x86_klass->mask_cpuid_features = tdx_mask_cpuid_features;
 }
