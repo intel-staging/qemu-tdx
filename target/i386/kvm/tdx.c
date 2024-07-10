@@ -33,6 +33,8 @@
 #include "kvm_i386.h"
 #include "tdx.h"
 
+#include "standard-headers/asm-x86/kvm_para.h"
+
 #define TDX_MIN_TSC_FREQUENCY_KHZ   (100 * 1000)
 #define TDX_MAX_TSC_FREQUENCY_KHZ   (10 * 1000 * 1000)
 
@@ -40,6 +42,14 @@
 #define TDX_TD_ATTRIBUTES_SEPT_VE_DISABLE   BIT_ULL(28)
 #define TDX_TD_ATTRIBUTES_PKS               BIT_ULL(30)
 #define TDX_TD_ATTRIBUTES_PERFMON           BIT_ULL(63)
+
+#define TDX_SUPPORTED_KVM_FEATURES  ((1U << KVM_FEATURE_NOP_IO_DELAY) | \
+                                     (1U << KVM_FEATURE_PV_UNHALT) | \
+                                     (1U << KVM_FEATURE_PV_TLB_FLUSH) | \
+                                     (1U << KVM_FEATURE_PV_SEND_IPI) | \
+                                     (1U << KVM_FEATURE_POLL_CONTROL) | \
+                                     (1U << KVM_FEATURE_PV_SCHED_YIELD) | \
+                                     (1U << KVM_FEATURE_MSI_EXT_DEST_ID))
 
 static TdxGuest *tdx_guest;
 
@@ -438,6 +448,81 @@ static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **er
     }
 }
 
+KvmCpuidInfo tdx_fixed0_bits = {
+    .cpuid.nent = 2,
+    .entries[0] = {
+        .function = 0x1,
+        .index = 0x0,
+        .ecx = CPUID_EXT_VMX | CPUID_EXT_SMX,
+        .edx = CPUID_PSE36,
+    },
+    .entries[1] = {
+        .function = 0x7,
+        .index = 0x0,
+        .flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX,
+        .ebx = CPUID_7_0_EBX_TSC_ADJUST | CPUID_7_0_EBX_SGX,
+        .ecx = CPUID_7_0_ECX_SGX_LC,
+    },
+};
+
+KvmCpuidInfo tdx_fixed1_bits = {
+    .cpuid.nent = 2,
+    .entries[0] = {
+        .function = 0x1,
+        .index = 0,
+        .ecx = CPUID_EXT_DSCPL,
+    },
+    .entries[1] = {
+        .function = 0x7,
+        .index = 0,
+        .flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX,
+        .edx = CPUID_7_0_EDX_CORE_CAPABILITY,
+    }
+};
+
+static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
+                                          uint32_t feature, uint32_t index,
+                                          int reg, uint32_t value)
+{
+    struct kvm_cpuid_entry2 *e;
+    uint32_t fixed0, fixed1;
+
+    e = cpuid_find_entry(&tdx_fixed0_bits.cpuid, feature, index);
+    if (e) {
+        fixed0 = cpuid_entry_get_reg(e, reg);
+        value &= ~fixed0;
+    }
+
+    e = cpuid_find_entry(&tdx_fixed1_bits.cpuid, feature, index);
+    if (e) {
+        fixed1 = cpuid_entry_get_reg(e, reg);
+        value |= fixed1;
+    }
+
+    switch(feature) {
+        case 0x7:
+            if (index == 0 && reg == R_EBX) {
+                // QEMU Intel PT support is broken
+                value &= ~CPUID_7_0_EBX_INTEL_PT;
+            }
+            break;
+        case 0x40000001:
+            if (reg == R_EAX) {
+                value &= TDX_SUPPORTED_KVM_FEATURES;
+            }
+            break;
+        case 0x80000008:
+            if (reg == R_EBX) {
+                value &= CPUID_8000_0008_EBX_WBNOINVD;
+            }
+            break;
+        default:
+            return value;
+    }
+
+    return value;
+}
+
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
 {
     if ((tdx->attributes & ~tdx_caps->supported_attrs)) {
@@ -806,4 +891,5 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     x86_klass->kvm_type = tdx_kvm_type;
     x86_klass->cpu_instance_init = tdx_cpu_instance_init;
     x86_klass->cpu_realizefn = tdx_cpu_realizefn;
+    x86_klass->adjust_cpuid_features = tdx_adjust_cpuid_features;
 }
