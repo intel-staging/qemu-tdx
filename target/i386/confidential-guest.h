@@ -14,6 +14,8 @@
 
 #include "qom/object.h"
 
+#ifndef CONFIG_USER_ONLY
+
 #include "exec/confidential-guest-support.h"
 
 #define TYPE_X86_CONFIDENTIAL_GUEST "x86-confidential-guest"
@@ -42,6 +44,8 @@ struct X86ConfidentialGuestClass {
     void (*cpu_post_init)(X86ConfidentialGuest *cg, CPUState *cpu);
     uint32_t (*mask_cpuid_features)(X86ConfidentialGuest *cg, uint32_t feature, uint32_t index,
                                     int reg, uint32_t value);
+    void (*adjust_cpuid)(X86ConfidentialGuest *cg, uint32_t index, uint32_t count,
+                                    uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx);
 };
 
 /**
@@ -90,5 +94,23 @@ static inline int x86_confidential_guest_mask_cpuid_features(X86ConfidentialGues
         return value;
     }
 }
+
+/*
+ *
+ *
+ */
+static inline void x86_confidential_guest_adjust_cpuid(X86ConfidentialGuest *cg,
+                                                       uint32_t index, uint32_t count,
+                                                       uint32_t *eax, uint32_t *ebx,
+                                                       uint32_t *ecx, uint32_t *edx)
+{
+    X86ConfidentialGuestClass *klass = X86_CONFIDENTIAL_GUEST_GET_CLASS(cg);
+
+    if (klass->adjust_cpuid) {
+        klass->adjust_cpuid(cg, index, count, eax, ebx, ecx, edx);
+    }
+}
+
+#endif /* !CONFIG_USER_ONLY */
 
 #endif
