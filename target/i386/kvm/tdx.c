@@ -482,6 +482,17 @@ static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
     return value;
 }
 
+static void tdx_adjust_cpuid(X86ConfidentialGuest *cg, uint32_t index, uint32_t count,
+                            uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
+{
+    switch (index) {
+        case 0x1:
+            /* TDX always advertise IA32_PERF_CAPABILITIES */
+            *ecx |= CPUID_EXT_PDCM;
+            break;
+    }
+}
+
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
 {
     if ((tdx->attributes & ~tdx_caps->supported_attrs)) {
@@ -865,4 +876,5 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     x86_klass->cpu_instance_init = tdx_cpu_instance_init;
     x86_klass->cpu_realizefn = tdx_cpu_realizefn;
     x86_klass->mask_cpuid_features = tdx_mask_cpuid_features;
+    x86_klass->adjust_cpuid = tdx_adjust_cpuid;
 }
