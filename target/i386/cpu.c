@@ -27,6 +27,7 @@
 #include "sysemu/hvf.h"
 #include "hvf/hvf-i386.h"
 #include "kvm/kvm_i386.h"
+#include "confidential-guest.h"
 #include "sev.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
@@ -7073,6 +7074,17 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         *edx = 0;
         break;
     }
+
+#ifndef CONFIG_USER_ONLY
+    {
+        MachineState *ms = MACHINE(qdev_get_machine());
+        if (ms->cgs) {
+            x86_confidential_guest_adjust_cpuid(
+                X86_CONFIDENTIAL_GUEST(ms->cgs),
+                index, count, eax, ebx, ecx, edx);
+        }
+    }
+#endif
 }
 
 static void x86_cpu_set_sgxlepubkeyhash(CPUX86State *env)
