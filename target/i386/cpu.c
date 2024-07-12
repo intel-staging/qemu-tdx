@@ -6553,10 +6553,14 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         break;
     case 5:
         /* MONITOR/MWAIT Leaf */
-        *eax = cpu->mwait.eax; /* Smallest monitor-line size in bytes */
-        *ebx = cpu->mwait.ebx; /* Largest monitor-line size in bytes */
-        *ecx = cpu->mwait.ecx; /* flags */
-        *edx = cpu->mwait.edx; /* mwait substates */
+        if (env->features[FEAT_1_ECX] & CPUID_EXT_MONITOR) {
+            *eax = cpu->mwait.eax; /* Smallest monitor-line size in bytes */
+            *ebx = cpu->mwait.ebx; /* Largest monitor-line size in bytes */
+            *ecx = cpu->mwait.ecx; /* flags */
+            *edx = cpu->mwait.edx; /* mwait substates */
+        } else {
+            *eax = *ebx = *ecx = *edx = 0;
+        }
         break;
     case 6:
         /* Thermal and Power Leaf */
