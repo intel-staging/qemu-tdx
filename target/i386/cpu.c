@@ -7729,7 +7729,9 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
      * requires the accel-specific code in cpu_exec_realizefn to
      * have already acquired the CPUID data into cpu->mwait.
      */
-    cpu->mwait.ecx |= CPUID_MWAIT_EMX | CPUID_MWAIT_IBE;
+    if (env->features[FEAT_1_ECX] & CPUID_EXT_MONITOR) {
+        cpu->mwait.ecx |= CPUID_MWAIT_EMX | CPUID_MWAIT_IBE;
+    }
 
     /* For 64bit systems think about the number of physical bits to present.
      * ideally this should be the same as the host; anything other than matching
