@@ -487,6 +487,11 @@ static void tdx_adjust_cpuid(X86ConfidentialGuest *cg, uint32_t index, uint32_t 
             /* TDX always advertise IA32_PERF_CAPABILITIES */
             *ecx |= CPUID_EXT_PDCM;
             break;
+        case 0x2:
+            /* TDX module hardcodes the values for leaf 0x2 */
+            *eax = 0x00feff01;
+            *ebx = *ecx = *edx = 0;
+            break;
         case 0x80000000:
             *ebx = *ecx = *edx = 0;
             break;
