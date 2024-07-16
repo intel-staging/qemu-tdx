@@ -305,21 +305,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
     tdx_post_init_vcpus();
 
     for_each_tdx_fw_entry(tdvf, entry) {
-        struct kvm_pre_fault_memory pre_fault = {
-            .gpa = entry->address,
-            .size = entry->size,
-        };
         struct kvm_tdx_init_mem_region region;
         uint32_t flags;
-
-        do {
-            r = kvm_vcpu_ioctl(first_cpu, KVM_PRE_FAULT_MEMORY, &pre_fault);
-        } while (r == -EAGAIN || r == -EINTR);
-
-        if (r < 0) {
-             error_report("KVM_PRE_FAULT_MEMORY failed %s", strerror(-r));
-             exit(1);
-        }
 
         region = (struct kvm_tdx_init_mem_region) {
             .source_addr = (uint64_t)entry->mem_ptr,
