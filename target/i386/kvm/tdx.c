@@ -24,6 +24,7 @@
 #include <linux/kvm_para.h>
 
 #include "cpu.h"
+#include "cpu-internal.h"
 #include "host-cpu.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
@@ -487,6 +488,85 @@ static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
     return value;
 }
 
+static void tdx_fetch_cpuid(CPUState *cpu, struct kvm_cpuid2 *fetch_cpuid)
+{
+    int r;
+
+    r = tdx_vcpu_ioctl(cpu, KVM_TDX_GET_CPUID, 0, fetch_cpuid);
+    if (r) {
+        error_report("KVM_TDX_GET_CPUID failed %s", strerror(-r));
+        exit(1);
+    }
+}
+
+static int tdx_check_features(X86ConfidentialGuest *cg, CPUState *cs)
+{
+    uint64_t actual, requested, unavailable, forced_on;
+    g_autofree struct kvm_cpuid2 *fetch_cpuid;
+    const char *forced_on_prefix = NULL;
+    const char *unav_prefix = NULL;
+    struct kvm_cpuid_entry2 *entry;
+    X86CPU *cpu = X86_CPU(cs);
+    CPUX86State *env = &cpu->env;
+    FeatureWordInfo *wi;
+    FeatureWord w;
+    bool mismatch = false;
+
+    fetch_cpuid = g_malloc0(sizeof(*fetch_cpuid) +
+                        sizeof(struct kvm_cpuid_entry2) * KVM_MAX_CPUID_ENTRIES);
+    tdx_fetch_cpuid(cs, fetch_cpuid);
+
+    if (cpu->check_cpuid || cpu->enforce_cpuid) {
+        unav_prefix = "TDX doesn't support requested feature";
+        forced_on_prefix = "TDX enforces set the feature";
+    }
+
+    for (w = 0; w < FEATURE_WORDS; w++) {
+        wi = &feature_word_info[w];
+        actual = 0;
+
+        switch (wi->type) {
+            case CPUID_FEATURE_WORD:
+                entry = cpuid_find_entry(fetch_cpuid, wi->cpuid.eax, wi->cpuid.ecx);
+                if (!entry) {
+                    /*
+                     * If  KVM doesn't report it means it's totally configurable
+                     * by QEMU
+                     */
+                    continue;
+                }
+
+                actual = cpuid_entry_get_reg(entry, wi->cpuid.reg);
+                break;
+            case MSR_FEATURE_WORD:
+                /*
+                 * TODO:
+                 * validate MSR features when KVM has interface report them.
+                 */
+                continue;
+        }
+
+        requested = env->features[w];
+        unavailable = requested & ~actual;
+        mark_unavailable_features(cpu, w, unavailable, unav_prefix);
+        if (unavailable) {
+            mismatch = true;
+        }
+
+        forced_on = actual & ~requested;
+        mark_forced_on_features(cpu, w, forced_on, forced_on_prefix);
+        if (forced_on) {
+            mismatch = true;
+        }
+    }
+
+    if (cpu->enforce_cpuid && mismatch) {
+        return -1;
+    }
+
+    return 0;
+}
+
 static void tdx_adjust_cpuid(X86ConfidentialGuest *cg, uint32_t index, uint32_t count,
                             uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
 {
@@ -863,5 +943,6 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     x86_klass->cpu_instance_init = tdx_cpu_instance_init;
     x86_klass->cpu_realizefn = tdx_cpu_realizefn;
     x86_klass->mask_cpuid_features = tdx_mask_cpuid_features;
+    x86_klass->check_features = tdx_check_features;
     x86_klass->adjust_cpuid = tdx_adjust_cpuid;
 }
