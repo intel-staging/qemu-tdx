@@ -414,11 +414,13 @@ static int tdx_kvm_type(X86ConfidentialGuest *cg)
 static void tdx_cpu_instance_init(X86ConfidentialGuest *cg, CPUState *cpu)
 {
     X86CPU *x86cpu = X86_CPU(cpu);
+    CPUX86State *env = &x86cpu->env;
 
     object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
     object_property_set_bool(OBJECT(cpu), "lmce", false, &error_abort);
 
     x86cpu->enable_cpuid_0x1f = true;
+    env->cpuid_level = 0x23;
 }
 
 static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **errp)
