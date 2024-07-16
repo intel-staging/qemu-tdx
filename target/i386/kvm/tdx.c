@@ -299,7 +299,11 @@ bool tdx_cpuid_check_mismatch(X86CPU *cpu, struct kvm_cpuid2 *expected,
                        "\teax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x\n",
                        cpu->apic_id, actual_e->function, actual_e->index,
                        actual_e->eax, actual_e->ebx, actual_e->ecx, actual_e->edx);
-                mismatch = true;
+                /*
+                 * For CPUID leaves that QEMU doesn't support yet, just print
+                 * the message and allow to continue running.
+                 */
+                //mismatch = true;
             }
         } else if (memcmp(expected_e, actual_e, sizeof(struct kvm_cpuid_entry2))) {
             mismatch_eax = actual_e->eax != expected_e->eax;
@@ -316,6 +320,15 @@ bool tdx_cpuid_check_mismatch(X86CPU *cpu, struct kvm_cpuid2 *expected,
             } else if (actual_e->function == 0x80000001) {
                 if ((actual_e->edx ^ expected_e->edx) == CPUID_EXT2_SYSCALL) {
                     mismatch_edx = false;
+                }
+            } else if (actual_e->function == 0x7 && actual_e->index == 0x0) {
+                /*
+                 * TDX module exposes some bit in CPUID.7_2.EDX to guest
+                 * unconditionally while QEMU hasn't added the support of this
+                 * CPUID leaf yet.
+                 */
+                if (actual_e->eax == 0x2) {
+                    mismatch_eax = false;
                 }
             }
 
