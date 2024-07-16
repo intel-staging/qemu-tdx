@@ -263,6 +263,101 @@ static void tdx_init_ram_entries(void)
     tdx_guest->nr_ram_entries = j;
 }
 
+static struct kvm_cpuid_entry2 *cpuid_entry2_find(struct kvm_cpuid_entry2 *entries, int nent, uint32_t function, uint32_t index)
+{
+    struct kvm_cpuid_entry2 *e;
+    int i;
+
+    for (i = 0; i < nent; i++) {
+        e = &entries[i];
+
+        if (e->function != function)
+            continue;
+
+        if (!(e->flags & KVM_CPUID_FLAG_SIGNIFCANT_INDEX) || e->index == index)
+            return e;
+    }
+
+    return NULL;
+}
+
+bool tdx_cpuid_check_mismatch(struct kvm_cpuid2 *expected, struct kvm_cpuid2 *actual)
+{
+    struct kvm_cpuid_entry2 *expected_e, *actual_e;
+    bool mismatch_eax, mismatch_ebx, mismatch_ecx, mismatch_edx;
+    bool mismatch = false;
+    int i;
+
+    for (i = 0; i < actual->nent; i++) {
+        actual_e = &actual->entries[i];
+        expected_e = cpuid_entry2_find(expected->entries, expected->nent, actual_e->function, actual_e->index);
+
+        if (!expected_e) {
+            if (actual_e->eax || actual_e->ebx || actual_e->ecx || actual_e->edx) {
+                warn_report("Unexpected CPUID entry [0x%x 0x%x] with non-zero value enforced by KVM/TDX module:\n"
+                             "\teax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x",
+                             actual_e->function, actual_e->index,
+                             actual_e->eax, actual_e->ebx, actual_e->ecx, actual_e->edx);
+                mismatch = true;
+            }
+        } else if (memcmp(expected_e, actual_e, sizeof(struct kvm_cpuid_entry2))) {
+            mismatch_eax = actual_e->eax != expected_e->eax;
+            mismatch_ebx = actual_e->ebx != expected_e->ebx;
+            mismatch_ecx = actual_e->ecx != expected_e->ecx;
+            mismatch_edx = actual_e->edx != expected_e->edx;
+
+            if (actual_e->function == 0xd && actual_e->index == 0x0) {
+                /* EBX is dynamically depends on the value of XCR0 */
+                mismatch_ebx = false;
+            } else if (actual_e->function == 0xd && actual_e->index == 0x1) {
+                /* EBX is dynamically depends on the value of XCR0 | MSR_IA32_XSS */
+                mismatch_ebx = false;
+            } else if (actual_e->function == 0x80000001) {
+                if ((actual_e->edx ^ expected_e->edx) == CPUID_EXT2_SYSCALL) {
+                    mismatch_edx = false;
+                }
+            }
+
+            if (!mismatch_eax && !mismatch_ebx && !mismatch_ecx && !mismatch_edx) {
+                continue;
+            }
+
+            mismatch = true;
+            error_report("TDX: CPUID value mismatches for entry [0x%x 0x%x]",
+                         actual_e->function, actual_e->index);
+            if (actual_e->eax != expected_e->eax) {
+                printf("\teax: TD guest sees: 0x%08x vs QEMU expects to set: 0x%08x\n",
+                              actual_e->eax, expected_e->eax);
+            }
+            if (actual_e->ebx != expected_e->ebx) {
+                printf("\tebx: TD guest sees: 0x%08x vs QEMU expects to set: 0x%08x\n",
+                              actual_e->ebx, expected_e->ebx);
+            }
+            if (actual_e->ecx != expected_e->ecx) {
+                printf("\tecx: TD guest sees: 0x%08x vs QEMU expects to set: 0x%08x\n",
+                              actual_e->ecx, expected_e->ecx);
+            }
+            if (actual_e->edx != expected_e->edx) {
+                printf("\tedx: TD guest sees: 0x%08x vs QEMU expects to set: 0x%08x\n",
+                              actual_e->edx, expected_e->edx);
+            }
+        }
+    }
+
+    return mismatch;
+}
+
+void tdx_fetch_cpuid(CPUState *cpu, struct kvm_cpuid2 *fetch_cpuid)
+{
+    int r;
+
+    r = tdx_vcpu_ioctl(cpu, KVM_TDX_GET_CPUID, 0, fetch_cpuid);
+    if (r) {
+        error_report("KVM_TDX_GET_CPUID failed %s", strerror(-r));
+        exit(1);
+    }
+}
+
 static void tdx_post_init_vcpus(void)
 {
     TdxFirmwareEntry *hob;

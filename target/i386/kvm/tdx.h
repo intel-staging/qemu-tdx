@@ -78,5 +78,7 @@ int tdx_pre_create_vcpu(CPUState *cpu, Error **errp);
 void tdx_set_tdvf_region(MemoryRegion *tdvf_mr);
 int tdx_parse_tdvf(void *flash_ptr, int size);
 int tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
+void tdx_fetch_cpuid(CPUState *cpu, struct kvm_cpuid2 *fetch_cpuid);
+bool tdx_cpuid_check_mismatch(struct kvm_cpuid2 *expected, struct kvm_cpuid2 *actual);
 
 #endif /* QEMU_I386_TDX_H */

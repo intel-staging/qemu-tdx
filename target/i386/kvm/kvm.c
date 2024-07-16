@@ -2304,6 +2304,19 @@ int kvm_arch_init_vcpu(CPUState *cs)
     cpuid_data.cpuid.nent = cpuid_i;
 
     cpuid_data.cpuid.padding = 0;
+
+    if (is_tdx_vm()) {
+        g_autofree struct kvm_cpuid2 *fetch_cpuid;
+
+        fetch_cpuid = g_malloc0(sizeof(*fetch_cpuid) +
+                          sizeof(struct kvm_cpuid_entry2) * KVM_MAX_CPUID_ENTRIES);
+        tdx_fetch_cpuid(cs, fetch_cpuid);
+        if (tdx_cpuid_check_mismatch(&cpuid_data.cpuid, fetch_cpuid)) {
+            printf("CPUID mismatch\n");
+            exit(1);
+        }
+    }
+
     r = kvm_vcpu_ioctl(cs, KVM_SET_CPUID2, &cpuid_data);
     if (r) {
         goto fail;
