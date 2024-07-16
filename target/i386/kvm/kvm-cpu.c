@@ -93,6 +93,7 @@ static bool kvm_cpu_realizefn(CPUState *cs, Error **errp)
 
     if (is_tdx_vm()) {
         cpu->enable_cpuid_0x1f = true;
+        env->cpuid_level = 0x23;
     }
 
     return true;
