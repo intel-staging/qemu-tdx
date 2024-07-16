@@ -6860,12 +6860,16 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         break;
     case 0x80000000:
         *eax = env->cpuid_xlevel;
-        *ebx = env->cpuid_vendor1;
-        *edx = env->cpuid_vendor2;
-        *ecx = env->cpuid_vendor3;
+        if (cpu->vendor_cpuid_only && IS_INTEL_CPU(env)) {
+            *ebx = *ecx = *edx = 0;
+        } else {
+            *ebx = env->cpuid_vendor1;
+            *edx = env->cpuid_vendor2;
+            *ecx = env->cpuid_vendor3;
+        }
         break;
     case 0x80000001:
-        *eax = env->cpuid_version;
+        *eax = (cpu->vendor_cpuid_only && IS_INTEL_CPU(env)) ? 0 : env->cpuid_version;
         *ebx = 0;
         *ecx = env->features[FEAT_8000_0001_ECX];
         *edx = env->features[FEAT_8000_0001_EDX];
