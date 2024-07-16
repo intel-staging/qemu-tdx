@@ -317,6 +317,21 @@ bool tdx_cpuid_check_mismatch(X86CPU *cpu, struct kvm_cpuid2 *expected,
                 if ((actual_e->edx ^ expected_e->edx) == CPUID_EXT2_SYSCALL) {
                     mismatch_edx = false;
                 }
+            } else if (actual_e->function == 0x1) {
+                /*
+                 * EBX[31:24]: initial APIC_ID, Before KVM_TDX_INIT_VCPU to
+                 * set x2apic_id, it remains 0.
+                 */
+                if ((actual_e->ebx & 0xffffff) == (expected_e->ebx & 0xffffff)
+                    && !(actual_e->ebx >> 24)) {
+                    mismatch_ebx = false;
+                }
+            }else if (actual_e->function == 0xb || actual_e->function == 0x1f) {
+                /*
+                 * Before KVM_TDX_INIT_VCPU to set x2apic_id, TDX module returns
+                 * 0 in EDX.
+                 */
+                mismatch_edx = false;
             }
 
             if (!mismatch_eax && !mismatch_ebx && !mismatch_ecx && !mismatch_edx) {
