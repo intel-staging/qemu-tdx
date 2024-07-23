@@ -586,7 +586,7 @@ static void tdx_inject_interrupt(uint32_t apicid, uint32_t vector)
 
 static hwaddr tdx_shared_bit(X86CPU *cpu)
 {
-    return (cpu->phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
+    return (cpu->guest_phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
 }
 
 /* 64MB at most in one call. What value is appropriate? */
