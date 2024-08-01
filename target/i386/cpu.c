@@ -6100,7 +6100,10 @@ uint64_t x86_cpu_get_supported_feature_word(X86CPU *cpu, FeatureWord w)
             unavail = ~0;
         }
         break;
-
+    case FEAT_8000_0001_EDX:
+        if (cpu && !IS_AMD_CPU(&cpu->env)) {
+            unavail = CPUID_EXT2_AMD_ALIASES;
+        }
     default:
         break;
     }
