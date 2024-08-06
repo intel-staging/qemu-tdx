@@ -326,6 +326,14 @@ bool tdx_cpuid_check_mismatch(X86CPU *cpu, struct kvm_cpuid2 *expected,
                     && !(actual_e->ebx >> 24)) {
                     mismatch_ebx = false;
                 }
+                /* KVM doesn't return HYPERVIROS bit */
+                if ((actual_e->ecx ^ expected_e->ecx) & CPUID_EXT_HYPERVISOR) {
+                    mismatch_ecx = false;
+                }
+                /* KVM doesn't report HT bit */
+                if ((actual_e->edx ^ expected_e->edx) & CPUID_HT) {
+                    mismatch_edx = false;
+                }
             }else if (actual_e->function == 0xb || actual_e->function == 0x1f) {
                 /*
                  * Before KVM_TDX_INIT_VCPU to set x2apic_id, TDX module returns
