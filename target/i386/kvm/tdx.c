@@ -548,6 +548,7 @@ static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
         case 0x1:
             if (reg == R_ECX) {
                 value &= ~(CPUID_EXT_VMX | CPUID_EXT_SMX);
+                value &= ~(CPUID_EXT_MONITOR | CPUID_EXT_TSC_DEADLINE_TIMER);
             } else if (reg == R_EDX) {
                 value &= ~CPUID_PSE36;
             }
