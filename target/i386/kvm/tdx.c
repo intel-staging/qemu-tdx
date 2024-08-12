@@ -479,6 +479,9 @@ static void tdx_adjust_cpuid(X86ConfidentialGuest *cg, uint32_t index, uint32_t 
             *eax = 0x00feff01;
             *ebx = *ecx = *edx = 0;
             break;
+        case 0x80000007:
+            *edx |= CPUID_APM_INVTSC;
+            break;
     }
 }
 
