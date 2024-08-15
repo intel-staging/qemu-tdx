@@ -45,6 +45,7 @@ struct X86ConfidentialGuestClass {
     void (*mask_feature_word)(X86ConfidentialGuest *cg, FeatureWord w, uint64_t *value);
     uint32_t (*adjust_cpuid_features)(X86ConfidentialGuest *cg, uint32_t feature, uint32_t index,
                                     int reg, uint32_t value);
+    int (*check_features)(X86ConfidentialGuest *cg, CPUState *cs);
 };
 
 /**
@@ -114,6 +115,17 @@ static inline int x86_confidential_guest_adjust_cpuid_features(X86ConfidentialGu
     } else {
         return value;
     }
+}
+
+static inline int x86_confidential_guest_check_features(X86ConfidentialGuest *cg, CPUState *cs)
+{
+    X86ConfidentialGuestClass *klass = X86_CONFIDENTIAL_GUEST_GET_CLASS(cg);
+
+    if (klass->check_features) {
+        return klass->check_features(cg, cs);
+    }
+
+    return 0;
 }
 
 #endif
