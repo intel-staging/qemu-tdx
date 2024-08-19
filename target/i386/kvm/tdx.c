@@ -23,6 +23,8 @@
 
 #include <linux/kvm_para.h>
 
+#include "cpu.h"
+#include "host-cpu.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
 #include "hw/i386/tdvf.h"
@@ -389,6 +391,18 @@ static void tdx_cpu_instance_init(X86ConfidentialGuest *cg, CPUState *cpu)
     object_property_set_bool(OBJECT(cpu), "pmu", false, &error_abort);
 }
 
+static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **errp)
+{
+    X86CPU *cpu = X86_CPU(cs);
+    uint32_t host_phys_bits = host_cpu_phys_bits();
+
+    if (!cpu->phys_bits) {
+        cpu->phys_bits = host_phys_bits;
+    } else if (cpu->phys_bits != host_phys_bits) {
+        error_setg(errp, "TDX only supports host physical bits (%u)", host_phys_bits);
+    }
+}
+
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
 {
     if ((tdx->attributes & ~tdx_caps->supported_attrs)) {
@@ -732,4 +746,5 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     klass->kvm_init = tdx_kvm_init;
     x86_klass->kvm_type = tdx_kvm_type;
     x86_klass->cpu_instance_init = tdx_cpu_instance_init;
+    x86_klass->cpu_realizefn = tdx_cpu_realizefn;
 }
