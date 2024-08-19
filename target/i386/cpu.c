@@ -7715,6 +7715,18 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
         return;
     }
 
+#ifndef CONFIG_USER_ONLY
+    MachineState *ms = MACHINE(qdev_get_machine());
+
+    if (ms->cgs) {
+        x86_confidenetial_guest_cpu_realizefn(X86_CONFIDENTIAL_GUEST(ms->cgs),
+                                              cs, &local_err);
+        if (local_err != NULL) {
+            goto out;
+        }
+    }
+#endif
+
     if (xcc->host_cpuid_required && !accel_uses_host_cpuid()) {
         g_autofree char *name = x86_cpu_class_get_model_name(xcc);
         error_setg(&local_err, "CPU model '%s' requires KVM or HVF", name);
@@ -7839,7 +7851,7 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
     }
 
 #ifndef CONFIG_USER_ONLY
-    MachineState *ms = MACHINE(qdev_get_machine());
+    //MachineState *ms = MACHINE(qdev_get_machine());
     qemu_register_reset(x86_cpu_machine_reset_cb, cpu);
 
     if (cpu->env.features[FEAT_1_EDX] & CPUID_APIC || ms->smp.cpus > 1) {
