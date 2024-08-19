@@ -2052,8 +2052,6 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
     cpuid_i = 0;
 
-    has_xsave2 = kvm_check_extension(cs->kvm_state, KVM_CAP_XSAVE2);
-
     r = kvm_arch_set_tsc_khz(cs);
     if (r < 0) {
         return r;
@@ -3026,6 +3024,7 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
         }
     }
 
+    has_xsave2 = kvm_check_extension(s, KVM_CAP_XSAVE2);
     has_xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
     has_sregs2 = kvm_check_extension(s, KVM_CAP_SREGS2) > 0;
 
