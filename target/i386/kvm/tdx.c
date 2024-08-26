@@ -20,6 +20,8 @@
 #include "sysemu/sysemu.h"
 #include "exec/ramblock.h"
 
+#include <linux/kvm_para.h>
+
 #include "cpu.h"
 #include "host-cpu.h"
 #include "hw/i386/e820_memory_layout.h"
@@ -381,6 +383,11 @@ static int tdx_kvm_init(ConfidentialGuestSupport *cgs, Error **errp)
      * Thus, just mark readonly memory not supported for simplicity.
      */
     kvm_readonly_mem_allowed = false;
+
+    /* TDX relies on KVM_HC_MAP_GPA_RANGE to handle TDG.VP.VMCALL<MapGPA> */
+    if (!kvm_enable_hypercall(BIT_ULL(KVM_HC_MAP_GPA_RANGE))) {
+        return -EOPNOTSUPP;
+    }
 
     qemu_add_machine_init_done_notifier(&tdx_machine_done_notify);
 
