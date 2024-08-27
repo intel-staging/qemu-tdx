@@ -536,6 +536,12 @@ static int tdx_check_features(X86ConfidentialGuest *cg, CPUState *cs)
                 }
 
                 actual = cpuid_entry_get_reg(entry, wi->cpuid.reg);
+
+                if (w == FEAT_1_ECX) {
+                    /* KVM doesn't report HYPERVISOR bit */
+                    actual |= CPUID_EXT_HYPERVISOR;
+                }
+
                 break;
             case MSR_FEATURE_WORD:
                 /*
