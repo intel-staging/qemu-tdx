@@ -664,6 +664,13 @@ static int tdx_check_features(X86ConfidentialGuest *cg, CPUState *cs)
 
         requested = env->features[w];
         unavailable = requested & ~actual;
+        /*
+         * Intel enumerates SYSCALL bit as 1 only when processor in 64-bit
+         * mode and before vcpu running it's not in 64-bit mode.
+         */
+        if (w == FEAT_8000_0001_EDX && unavailable & CPUID_EXT2_SYSCALL) {
+            unavailable &= ~CPUID_EXT2_SYSCALL;
+        }
         mark_unavailable_features(cpu, w, unavailable, unav_prefix);
         if (unavailable) {
             mismatch = true;
