@@ -448,6 +448,40 @@ static void tdx_cpu_realizefn(X86ConfidentialGuest *cg, CPUState *cs, Error **er
     }
 }
 
+static uint32_t tdx_mask_cpuid_by_xfam(uint32_t feature, uint32_t index,
+                                       int reg, uint32_t value)
+{
+    const FeatureWordInfo *wi;
+    const ExtSaveArea *esa;
+    int i;
+
+    assert(tdx_caps);
+
+    for (i = 0; i < ARRAY_SIZE(x86_ext_save_areas); i++) {
+        if ((1ULL << i) & tdx_caps->supported_xfam) {
+            continue;
+        }
+
+        if (!((1ULL << i) & CPUID_XSTATE_MASK)) {
+            continue;
+        }
+
+        esa = &x86_ext_save_areas[i];
+        wi = &feature_word_info[esa->feature];
+        if (wi->type != CPUID_FEATURE_WORD) {
+            continue;
+        }
+        if (wi->cpuid.eax != feature ||
+            (wi->cpuid.needs_ecx && wi->cpuid.ecx != index) ||
+            wi->cpuid.reg != reg) {
+            continue;
+        }
+        value &= ~esa->bits;
+    }
+
+    return value;
+}
+
 static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
                                         uint32_t feature, uint32_t index,
                                         int reg, uint32_t value)
@@ -483,6 +517,8 @@ static uint32_t tdx_mask_cpuid_features(X86ConfidentialGuest *cg,
         default:
             return value;
     }
+
+    value = tdx_mask_cpuid_by_xfam(feature, index, reg, value);
 
     return value;
 }
