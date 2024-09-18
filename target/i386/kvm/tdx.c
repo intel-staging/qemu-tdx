@@ -523,6 +523,54 @@ static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
     return value;
 }
 
+typedef struct TdxAttrsMap {
+    uint32_t index;
+    FeatureWord feat;
+    uint64_t feat_mask;
+} TdxAttrsMap;
+
+static TdxAttrsMap tdx_attrs_maps[] = {
+    {.index = 27,
+     .feat = FEAT_7_1_EAX,
+     .feat_mask = CPUID_7_1_EAX_LASS},
+    {.index = 30,
+     .feat = FEAT_7_0_ECX,
+     .feat_mask = CPUID_7_0_ECX_PKS,},
+    {.index = 31,
+     .feat = FEAT_7_0_ECX,
+     .feat_mask = CPUID_7_0_ECX_KeyLocker,
+    },
+};
+
+static void tdx_mask_feature_word_by_attrs(FeatureWord w, uint64_t *value)
+{
+    TdxAttrsMap *attrs_map;
+    uint64_t unavail = 0;
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(tdx_attrs_maps); i++) {
+        attrs_map = &tdx_attrs_maps[i];
+
+        if (w != attrs_map->feat) {
+            continue;
+        }
+
+        if (!((1ULL << attrs_map->index) & tdx_caps->supported_attrs)) {
+            unavail |= attrs_map->feat_mask;
+        }
+    }
+
+    if (unavail) {
+        *value &= ~unavail;
+    }
+}
+
+static void tdx_mask_feature_word(X86ConfidentialGuest *cg, FeatureWord w,
+                                  uint64_t *value)
+{
+    tdx_mask_feature_word_by_attrs(w, value);
+}
+
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
 {
     if ((tdx->attributes & ~tdx_caps->supported_attrs)) {
@@ -891,5 +939,6 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
     x86_klass->kvm_type = tdx_kvm_type;
     x86_klass->cpu_instance_init = tdx_cpu_instance_init;
     x86_klass->cpu_realizefn = tdx_cpu_realizefn;
+    x86_klass->mask_feature_word = tdx_mask_feature_word;
     x86_klass->adjust_cpuid_features = tdx_adjust_cpuid_features;
 }
