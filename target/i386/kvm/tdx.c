@@ -24,6 +24,7 @@
 #include <linux/kvm_para.h>
 
 #include "cpu.h"
+#include "cpu-internal.h"
 #include "host-cpu.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
@@ -583,6 +584,42 @@ static void tdx_mask_cpuid_by_attrs(uint32_t feature, uint32_t index,
     }
 }
 
+static void tdx_mask_cpuid_by_xfam(uint32_t feature, uint32_t index,
+                                          int reg, uint32_t *value)
+{
+    const FeatureWordInfo *f;
+    const ExtSaveArea *esa;
+    uint64_t unavail = 0;
+    int i;
+
+    assert(tdx_caps);
+
+    for (i = 0; i < ARRAY_SIZE(x86_ext_save_areas); i++) {
+        if ((1ULL << i) & tdx_caps->supported_xfam) {
+            continue;
+        }
+
+        if (!((1ULL << i) & CPUID_XSTATE_MASK)) {
+            continue;
+        }
+
+        esa = &x86_ext_save_areas[i];
+        f = &feature_word_info[esa->feature];
+        assert(f->type == CPUID_FEATURE_WORD);
+        if (f->cpuid.eax != feature ||
+            (f->cpuid.needs_ecx && f->cpuid.ecx != index) ||
+            f->cpuid.reg != reg) {
+            continue;
+        }
+
+        unavail |= esa->bits;
+    }
+
+    if (unavail) {
+        *value &= ~unavail;
+    }
+}
+
 static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
                                           uint32_t feature, uint32_t index,
                                           int reg, uint32_t value)
@@ -617,6 +654,7 @@ static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
     }
 
     tdx_mask_cpuid_by_attrs(feature, index, reg, &value);
+    tdx_mask_cpuid_by_xfam(feature, index, reg, &value);
 
     e = cpuid_find_entry(&tdx_fixed0_bits.cpuid, feature, index);
     if (e) {
