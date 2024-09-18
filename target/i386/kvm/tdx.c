@@ -531,6 +531,58 @@ KvmCpuidInfo tdx_fixed1_bits = {
     },
 };
 
+typedef struct TdxAttrsMap {
+    uint32_t attr_index;
+    uint32_t cpuid_leaf;
+    uint32_t cpuid_subleaf;
+    int cpuid_reg;
+    uint32_t feat_mask;
+} TdxAttrsMap;
+
+static TdxAttrsMap tdx_attrs_maps[] = {
+    {.attr_index = 27,
+     .cpuid_leaf = 7,
+     .cpuid_subleaf = 1,
+     .cpuid_reg = R_EAX,
+     .feat_mask = CPUID_7_1_EAX_LASS},
+    {.attr_index = 30,
+     .cpuid_leaf = 7,
+     .cpuid_subleaf = 0,
+     .cpuid_reg = R_ECX,
+     .feat_mask = CPUID_7_0_ECX_PKS,},
+    {.attr_index = 31,
+     .cpuid_leaf = 7,
+     .cpuid_subleaf = 0,
+     .cpuid_reg = R_ECX,
+     .feat_mask = CPUID_7_0_ECX_KeyLocker,
+    },
+};
+
+static void tdx_mask_cpuid_by_attrs(uint32_t feature, uint32_t index,
+                                    int reg, uint32_t *value)
+{
+    TdxAttrsMap *map;
+    uint64_t unavail = 0;
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(tdx_attrs_maps); i++) {
+        map = &tdx_attrs_maps[i];
+
+        if (feature != map->cpuid_leaf || index != map->cpuid_subleaf ||
+            reg != map->cpuid_reg) {
+            continue;
+        }
+
+        if (!((1ULL << map->attr_index) & tdx_caps->supported_attrs)) {
+            unavail |= map->feat_mask;
+        }
+    }
+
+    if (unavail) {
+        *value &= ~unavail;
+    }
+}
+
 static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
                                           uint32_t feature, uint32_t index,
                                           int reg, uint32_t value)
@@ -563,6 +615,8 @@ static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
         default:
             break;
     }
+
+    tdx_mask_cpuid_by_attrs(feature, index, reg, &value);
 
     e = cpuid_find_entry(&tdx_fixed0_bits.cpuid, feature, index);
     if (e) {
