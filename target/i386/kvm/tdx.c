@@ -565,10 +565,42 @@ static void tdx_mask_feature_word_by_attrs(FeatureWord w, uint64_t *value)
     }
 }
 
+static void tdx_mask_feature_word_by_xfam(FeatureWord w, uint64_t *value)
+{
+    const ExtSaveArea *esa;
+    uint64_t unavail = 0;
+    int i;
+
+    assert(tdx_caps);
+
+    for (i = 0; i < ARRAY_SIZE(x86_ext_save_areas); i++) {
+        if ((1ULL << i) & tdx_caps->supported_xfam) {
+            continue;
+        }
+
+        if (!((1ULL << i) & CPUID_XSTATE_MASK)) {
+            continue;
+        }
+
+        esa = &x86_ext_save_areas[i];
+
+        if (w != esa->feature) {
+            continue;
+        }
+
+        unavail |= esa->bits;
+    }
+
+    if (unavail) {
+        *value &= ~unavail;
+    }
+}
+
 static void tdx_mask_feature_word(X86ConfidentialGuest *cg, FeatureWord w,
                                   uint64_t *value)
 {
     tdx_mask_feature_word_by_attrs(w, value);
+    tdx_mask_feature_word_by_xfam(w, value);
 }
 
 static int tdx_validate_attributes(TdxGuest *tdx, Error **errp)
