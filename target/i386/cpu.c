@@ -6136,6 +6136,16 @@ uint64_t x86_cpu_get_supported_feature_word(X86CPU *cpu, FeatureWord w)
     }
 
     r &= ~unavail;
+
+#ifndef CONFIG_USER_ONLY
+    MachineState *ms = MACHINE(qdev_get_machine());
+
+    if (ms->cgs) {
+        x86_confidenetial_guest_mask_feature_word(X86_CONFIDENTIAL_GUEST(ms->cgs),
+                                                  w, &r);
+    }
+#endif
+
     if (cpu && cpu->migratable) {
         r &= x86_cpu_get_migratable_flags(cpu, w);
     }

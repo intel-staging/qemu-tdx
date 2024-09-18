@@ -15,6 +15,7 @@
 #include "qom/object.h"
 
 #include "exec/confidential-guest-support.h"
+#include "cpu.h"
 
 #define TYPE_X86_CONFIDENTIAL_GUEST "x86-confidential-guest"
 
@@ -41,6 +42,7 @@ struct X86ConfidentialGuestClass {
     int (*kvm_type)(X86ConfidentialGuest *cg);
     void (*cpu_instance_init)(X86ConfidentialGuest *cg, CPUState *cpu);
     void (*cpu_realizefn)(X86ConfidentialGuest *cg, CPUState *cpu, Error **errp);
+    void (*mask_feature_word)(X86ConfidentialGuest *cg, FeatureWord w, uint64_t *value);
     uint32_t (*adjust_cpuid_features)(X86ConfidentialGuest *cg, uint32_t feature, uint32_t index,
                                     int reg, uint32_t value);
 };
@@ -79,6 +81,17 @@ static inline void x86_confidenetial_guest_cpu_realizefn(X86ConfidentialGuest *c
 
     if (klass->cpu_realizefn) {
         klass->cpu_realizefn(cg, cpu, errp);
+    }
+}
+
+static inline void x86_confidenetial_guest_mask_feature_word(X86ConfidentialGuest *cg,
+                                                         FeatureWord w,
+                                                         uint64_t *value)
+{
+    X86ConfidentialGuestClass *klass = X86_CONFIDENTIAL_GUEST_GET_CLASS(cg);
+
+    if (klass->mask_feature_word) {
+        klass->mask_feature_word(cg, w, value);
     }
 }
 
