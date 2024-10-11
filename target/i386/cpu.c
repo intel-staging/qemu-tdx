@@ -6512,7 +6512,6 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         *edx = env->features[FEAT_1_EDX];
         if (threads_per_pkg > 1) {
             *ebx |= threads_per_pkg << 16;
-            *edx |= CPUID_HT;
         }
         if (!cpu->enable_pmu) {
             *ecx &= ~CPUID_EXT_PDCM;
@@ -7661,6 +7660,8 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
     Error *local_err = NULL;
     unsigned requested_lbr_fmt;
 
+    qemu_early_init_vcpu(cs);
+
 #if defined(CONFIG_TCG) && !defined(CONFIG_USER_ONLY)
     /* Use pc-relative instructions in system-mode */
     tcg_cflags_set(cs, CF_PCREL);
@@ -7726,6 +7727,14 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
                        "Host doesn't support requested features" :
                        "TCG doesn't support requested features");
         goto out;
+    }
+
+    /*
+     * It needs to called after feature filter because KVM doesn't report HT
+     * as supported
+     */
+    if (cs->nr_cores * cs->nr_threads > 1) {
+        env->features[FEAT_1_EDX] |= CPUID_HT;
     }
 
     /* On AMD CPUs, some CPUID[8000_0001].EDX bits must match the bits on
