@@ -662,6 +662,14 @@ const AccelOpsClass *cpus_get_accel(void)
     return cpus_accel;
 }
 
+void qemu_early_init_vcpu(CPUState *cpu)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+
+    cpu->nr_cores = machine_topo_get_cores_per_socket(ms);
+    cpu->nr_threads =  ms->smp.threads;
+}
+
 void qemu_init_vcpu(CPUState *cpu)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
