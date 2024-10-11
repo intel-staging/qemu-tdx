@@ -10,6 +10,10 @@ void cpu_remove_sync(CPUState *cpu)
 {
 }
 
+void qemu_early_init_vcpu(CPUState *cpu)
+{
+}
+
 void qemu_init_vcpu(CPUState *cpu)
 {
 }

@@ -1064,6 +1064,14 @@ void start_exclusive(void);
 void end_exclusive(void);
 
 /**
+ * qemu_early_init_vcpu:
+ * @cpu: The vCPU to initialize.
+ *
+ * Early initializes a vCPU.
+ */
+void qemu_early_init_vcpu(CPUState *cpu);
+
+/**
  * qemu_init_vcpu:
  * @cpu: The vCPU to initialize.
  *
