@@ -12,8 +12,14 @@
 #define QEMU_KVM_I386_H
 
 #include "sysemu/kvm.h"
+#include <linux/kvm.h>
 
 #define KVM_MAX_CPUID_ENTRIES  100
+
+typedef struct KvmCpuidInfo {
+    struct kvm_cpuid2 cpuid;
+    struct kvm_cpuid_entry2 entries[KVM_MAX_CPUID_ENTRIES];
+} KvmCpuidInfo;
 
 #ifdef CONFIG_KVM
 
