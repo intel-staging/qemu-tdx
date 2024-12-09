@@ -1197,6 +1197,19 @@ MemoryRegionSection *memory_region_section_new_copy(MemoryRegionSection *s);
 void memory_region_section_free_copy(MemoryRegionSection *s);
 
 /**
+ * memory_region_section_intersect_range: Adjust the memory section to cover
+ * the intersection with the given range.
+ *
+ * @s: the #MemoryRegionSection to be adjusted
+ * @offset: the offset of the given range in the memory region
+ * @size: the size of the given range
+ *
+ * Returns false if the intersection is empty, otherwise returns true.
+ */
+bool memory_region_section_intersect_range(MemoryRegionSection *s,
+                                           uint64_t offset, uint64_t size);
+
+/**
  * memory_region_init: Initialize a memory region
  *
  * The region typically acts as a container for other memory regions.  Use
