@@ -6039,10 +6039,14 @@ static int kvm_handle_hc_map_gpa_range(struct kvm_run *run)
 
 static int kvm_handle_hypercall(struct kvm_run *run)
 {
-    if (run->hypercall.nr == KVM_HC_MAP_GPA_RANGE)
-        return kvm_handle_hc_map_gpa_range(run);
+    int ret = -EINVAL;
 
-    return -EINVAL;
+    if (run->hypercall.nr == KVM_HC_MAP_GPA_RANGE)
+        ret = kvm_handle_hc_map_gpa_range(run);
+
+    run->hypercall.ret = ret;
+
+    return ret;
 }
 
 #define VMX_INVALID_GUEST_STATE 0x80000021
