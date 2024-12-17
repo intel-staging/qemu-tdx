@@ -529,6 +529,50 @@ KvmCpuidInfo tdx_fixed1_bits = {
     },
 };
 
+/* TDX module 1.5.08.04.0784 on EMR */
+KvmCpuidInfo tdx_configurable_bits = {
+    .cpuid.nent = 6,
+    .entries[0] = {
+        .function = 0x1,
+        .index = 0,
+        .eax = 0x0fff3fff,
+        .ebx = 0x00ff0000,
+        .ecx = 0x31044988,
+        .edx = 0xb8400000,
+    },
+    .entries[1] = {
+        .function = 0x7,
+        .index = 0,
+        .flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX,
+        .ebx = 0xd02b9b18,
+        .ecx = 0x02417f64,
+        .edx = 0x00054010,
+    },
+    .entries[2] = {
+        .function = 0x7,
+        .index = 0x1,
+        .flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX,
+        .eax = 0x00001c30,
+    },
+    .entries[3] = {
+        .function = 0x7,
+        .index = 0x2,
+        .flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX,
+        .edx = 0x00000008,
+    },
+    .entries[4] = {
+        .function = 0x1c,
+        .index = 0x0,
+        .eax = 0x0000000b,
+    },
+    .entries[5] = {
+        .function = 0x80000008,
+        .index = 0,
+        .eax = 0x000000ff,
+        .ebx = 0x00000200,
+    },
+};
+
 typedef struct TdxAttrsMap {
     uint32_t attr_index;
     uint32_t cpuid_leaf;
@@ -621,7 +665,7 @@ static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
                                           uint32_t feature, uint32_t index,
                                           int reg, uint32_t value)
 {
-    struct kvm_cpuid_entry2 *e;
+    struct kvm_cpuid_entry2 *e, *e1;
     uint32_t fixed0, fixed1;
 
     switch (feature) {
@@ -652,6 +696,21 @@ static uint32_t tdx_adjust_cpuid_features(X86ConfidentialGuest *cg,
 
     tdx_mask_cpuid_by_attrs(feature, index, reg, &value);
     tdx_mask_cpuid_by_xfam(feature, index, reg, &value);
+
+    e = cpuid_find_entry(&tdx_caps->cpuid, feature, index);
+    if (e) {
+        e1 = cpuid_find_entry(&tdx_configurable_bits.cpuid, feature, index);
+        if (e1) {
+            uint32_t kvm_configurable = cpuid_entry_get_reg(e, reg);
+            uint32_t tdx_module_configurable = cpuid_entry_get_reg(e1, reg);
+            for (int i = 0; i < 32; i++) {
+                uint32_t f = 1U << i;
+                if (f & tdx_module_configurable && !(f & kvm_configurable)) {
+                    value &= ~f;
+                }
+            }
+        }
+    }
 
     e = cpuid_find_entry(&tdx_fixed0_bits.cpuid, feature, index);
     if (e) {
