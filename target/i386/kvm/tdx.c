@@ -1071,7 +1071,7 @@ static void tdx_panicked_on_fatal_error(X86CPU *cpu, uint64_t error_code,
 
 int tdx_handle_report_fatal_error(X86CPU *cpu, struct kvm_run *run)
 {
-    uint64_t error_code = run->system_event.data[0];
+    uint64_t error_code = run->system_event.data[R_R12];
     char *message = NULL;
     uint64_t gpa = -1ull;
 
@@ -1081,18 +1081,29 @@ int tdx_handle_report_fatal_error(X86CPU *cpu, struct kvm_run *run)
         return -1;
     }
 
-    /* It has optional message */
-    if (run->system_event.data[2]) {
+    /* It has optional message, treat it as ASCII byte stream. */
+    if (run->system_event.data[R_R14]) {
+	uint64_t * tmp;
+
 #define TDX_FATAL_MESSAGE_MAX        64
         message = g_malloc0(TDX_FATAL_MESSAGE_MAX + 1);
 
-        memcpy(message, &run->system_event.data[2], TDX_FATAL_MESSAGE_MAX);
+	tmp = (uint64_t *)message;
+        /* The order is defined in TDX GHCI spec */
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_R14]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_R15]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_EBX]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_EDI]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_ESI]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_R8]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_R9]);
+        *(tmp++) = cpu_to_le64(run->system_event.data[R_EDX]);
         message[TDX_FATAL_MESSAGE_MAX] = '\0';
     }
 
 #define TDX_REPORT_FATAL_ERROR_GPA_VALID    BIT_ULL(63)
     if (error_code & TDX_REPORT_FATAL_ERROR_GPA_VALID) {
-        gpa = run->system_event.data[1];
+        gpa = run->system_event.data[R_R13];
     }
 
     tdx_panicked_on_fatal_error(cpu, error_code, message, gpa);
