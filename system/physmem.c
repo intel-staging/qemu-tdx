@@ -4149,6 +4149,7 @@ void ram_block_add_cpr_blocker(RAMBlock *rb, Error **errp)
         return;
     }
 
+    rb->cpr_blocker = NULL;
     error_setg(&rb->cpr_blocker,
                "Memory region %s is not compatible with CPR. share=on is "
                "required for memory-backend objects, and aux-ram-share=on is "
