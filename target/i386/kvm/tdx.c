@@ -1250,6 +1250,21 @@ int tdx_handle_get_quote(X86CPU *cpu, struct kvm_run *run)
     return 0;
 }
 
+int tdx_handle_get_tdvmcall_info(X86CPU *cpu, struct kvm_run *run)
+{
+    if (run->tdx_get_tdvmcall_info.leaf != 1) {
+	run->tdx_get_tdvmcall_info.ret = TDG_VP_VMCALL_INVALID_OPERAND;
+	return 0;
+    }
+
+    run->tdx_get_tdvmcall_info.leaf_output[0] = TDG_VP_VMCALL_SUBFUNC_GET_QUOTE;
+    run->tdx_get_tdvmcall_info.leaf_output[1] = 0;
+    run->tdx_get_tdvmcall_info.leaf_output[2] = 0;
+    run->tdx_get_tdvmcall_info.leaf_output[3] = 0;
+    run->tdx_get_tdvmcall_info.ret = TDG_VP_VMCALL_SUCCESS;
+
+    return 0;
+}
 
 static void tdx_panicked_on_fatal_error(X86CPU *cpu, uint64_t error_code,
                                         char *message, uint64_t gpa)
