@@ -6154,6 +6154,9 @@ int kvm_arch_handle_exit(CPUState *cs, struct kvm_run *run)
     case KVM_EXIT_TDX_SETUP_EVENT_NOTIFY:
         ret = tdx_handle_setup_event_notify(cpu, run);
         break;
+    case KVM_EXIT_TDX_GET_TDVMCALL_INFO:
+	ret = tdx_handle_get_tdvmcall_info(cpu, run);
+	break;
     default:
         fprintf(stderr, "KVM: unknown exit reason %d\n", run->exit_reason);
         ret = -1;

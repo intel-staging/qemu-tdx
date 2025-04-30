@@ -78,5 +78,6 @@ int tdx_parse_tdvf(void *flash_ptr, int size);
 int tdx_handle_report_fatal_error(X86CPU *cpu, struct kvm_run *run);
 int tdx_handle_get_quote(X86CPU *cpu, struct kvm_run *run);
 int tdx_handle_setup_event_notify(X86CPU *cpu, struct kvm_run *run);
+int tdx_handle_get_tdvmcall_info(X86CPU *cpu, struct kvm_run *run);
 
 #endif /* QEMU_I386_TDX_H */
