@@ -1388,6 +1388,10 @@ static void tdx_guest_get_quote_generation(Object *obj, Visitor *v,
 {
     TdxGuest *tdx = TDX_GUEST(obj);
 
+    if (!tdx->quote_generator) {
+        error_setg(errp, "quote-generation-socket is not set");
+        return;
+    }
     visit_type_SocketAddress(v, name, &tdx->quote_generator->socket, errp);
 }
 
