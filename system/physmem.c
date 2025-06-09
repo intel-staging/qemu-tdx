@@ -89,6 +89,9 @@
 
 #include "memory-internal.h"
 
+#include <linux/guestmem.h>
+#include <linux/kvm.h>
+
 //#define DEBUG_SUBPAGE
 
 /* ram_list is read under rcu_read_lock()/rcu_read_unlock().  Writes
@@ -1911,6 +1914,9 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
 
     if (new_block->flags & RAM_GUEST_MEMFD) {
         int ret;
+        bool in_place = kvm_guest_memfd_inplace_supported;
+
+        new_block->guest_memfd_flags = 0;
 
         if (!kvm_enabled()) {
             error_setg(errp, "cannot set up private guest memory for %s: KVM required",
@@ -1927,11 +1933,24 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
             goto out_free;
         }
 
+        if (in_place) {
+            new_block->guest_memfd_flags |= GUEST_MEMFD_FLAG_SUPPORT_SHARED |
+                                            GUEST_MEMFD_FLAG_INIT_PRIVATE;
+        }
+
         new_block->guest_memfd = kvm_create_guest_memfd(new_block->max_length,
-                                                        0, errp);
+                                 new_block->guest_memfd_flags, errp);
         if (new_block->guest_memfd < 0) {
             qemu_mutex_unlock_ramlist();
             goto out_free;
+        }
+
+        if (in_place) {
+            qemu_ram_munmap(new_block->fd, new_block->host, new_block->max_length);
+            new_block->host = qemu_ram_mmap(new_block->guest_memfd,
+                                            new_block->max_length,
+                                            QEMU_VMALLOC_ALIGN,
+                                            QEMU_MAP_SHARED, 0);
         }
 
         /*

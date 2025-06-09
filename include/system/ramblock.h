@@ -46,6 +46,7 @@ struct RAMBlock {
     int fd;
     uint64_t fd_offset;
     int guest_memfd;
+    uint64_t guest_memfd_flags;
     RamBlockAttributes *attributes;
     size_t page_size;
     /* dirty bitmap used during migration */

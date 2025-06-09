@@ -1831,6 +1831,8 @@ bool memory_region_is_protected(MemoryRegion *mr);
  */
 bool memory_region_has_guest_memfd(MemoryRegion *mr);
 
+bool memory_region_guest_memfd_in_place_conversion(MemoryRegion *mr);
+
 /**
  * memory_region_get_iommu: check whether a memory region is an iommu
  *

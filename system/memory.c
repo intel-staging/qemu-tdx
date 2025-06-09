@@ -37,6 +37,7 @@
 
 #include "memory-internal.h"
 
+#include <linux/kvm.h>
 //#define DEBUG_UNASSIGNED
 
 static unsigned memory_region_transaction_depth;
@@ -1878,6 +1879,12 @@ bool memory_region_is_protected(MemoryRegion *mr)
 bool memory_region_has_guest_memfd(MemoryRegion *mr)
 {
     return mr->ram_block && mr->ram_block->guest_memfd >= 0;
+}
+
+bool memory_region_guest_memfd_in_place_conversion(MemoryRegion *mr)
+{
+    return mr && memory_region_has_guest_memfd(mr) &&
+           (mr->ram_block->guest_memfd_flags & GUEST_MEMFD_FLAG_SUPPORT_SHARED);
 }
 
 uint8_t memory_region_get_dirty_log_mask(MemoryRegion *mr)

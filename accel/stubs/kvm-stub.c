@@ -24,6 +24,7 @@ bool kvm_gsi_direct_mapping;
 bool kvm_allowed;
 bool kvm_readonly_mem_allowed;
 bool kvm_msi_use_devid;
+bool kvm_guest_memfd_inplace_supported;
 
 void kvm_flush_coalesced_mmio_buffer(void)
 {

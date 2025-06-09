@@ -106,6 +106,7 @@ static int kvm_sstep_flags;
 static bool kvm_immediate_exit;
 static uint64_t kvm_supported_memory_attributes;
 static bool kvm_guest_memfd_supported;
+bool kvm_guest_memfd_inplace_supported;
 static hwaddr kvm_max_slot_size = ~0;
 
 static const KVMCapabilityInfo kvm_required_capabilites[] = {
@@ -1488,6 +1489,30 @@ static int kvm_set_memory_attributes(hwaddr start, uint64_t size, uint64_t attr)
     return r;
 }
 
+static int kvm_set_guest_memfd_shareability(MemoryRegion *mr, ram_addr_t offset,
+                                            uint64_t size, bool shared)
+{
+    int guest_memfd = mr->ram_block->guest_memfd;
+    struct kvm_gmem_convert param = {
+                .offset = offset,
+                .size = size,
+                .error_offset = 0,
+    };
+    unsigned long op;
+    int r;
+
+    op = shared ? KVM_GMEM_CONVERT_SHARED : KVM_GMEM_CONVERT_PRIVATE;
+
+    r = ioctl(guest_memfd, op, &param);
+    if (r) {
+        error_report("failed to set guest_memfd offset 0x%lx size 0x%lx to %s  "
+                     "error '%s' error offset 0x%llx",
+                     offset, size, shared ? "shared" : "private",
+                     strerror(errno), param.error_offset);
+    }
+    return r;
+}
+
 int kvm_set_memory_attributes_private(hwaddr start, uint64_t size)
 {
     return kvm_set_memory_attributes(start, size, KVM_MEMORY_ATTRIBUTE_PRIVATE);
@@ -1605,7 +1630,8 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
             abort();
         }
 
-        if (memory_region_has_guest_memfd(mr)) {
+        if (memory_region_has_guest_memfd(mr) &&
+            !memory_region_guest_memfd_in_place_conversion(mr)) {
             err = kvm_set_memory_attributes_private(start_addr, slot_size);
             if (err) {
                 error_report("%s: failed to set memory attribute private: %s",
@@ -2779,6 +2805,9 @@ static int kvm_init(AccelState *as, MachineState *ms)
         kvm_check_extension(s, KVM_CAP_GUEST_MEMFD) &&
         kvm_check_extension(s, KVM_CAP_USER_MEMORY2) &&
         (kvm_supported_memory_attributes & KVM_MEMORY_ATTRIBUTE_PRIVATE);
+    kvm_guest_memfd_inplace_supported =
+        kvm_check_extension(s, KVM_CAP_GMEM_SHARED_MEM) &&
+        kvm_check_extension(s, KVM_CAP_GMEM_CONVERSION);
     kvm_pre_fault_memory_supported = kvm_vm_check_extension(s, KVM_CAP_PRE_FAULT_MEMORY);
 
     if (s->kernel_irqchip_split == ON_OFF_AUTO_AUTO) {
@@ -3056,6 +3085,7 @@ static void kvm_eat_signals(CPUState *cpu)
 
 int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 {
+    bool in_place_conversion = false;
     MemoryRegionSection section;
     ram_addr_t offset;
     MemoryRegion *mr;
@@ -3112,38 +3142,58 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
         goto out_unref;
     }
 
-    if (to_private) {
-        ret = kvm_set_memory_attributes_private(start, size);
-    } else {
-        ret = kvm_set_memory_attributes_shared(start, size);
-    }
-    if (ret) {
-        goto out_unref;
-    }
-
     addr = memory_region_get_ram_ptr(mr) + section.offset_within_region;
     rb = qemu_ram_block_from_host(addr, false, &offset);
 
-    ret = ram_block_attributes_state_change(RAM_BLOCK_ATTRIBUTES(mr->rdm),
-                                            offset, size, to_private);
+    if (to_private) {
+        ret = ram_block_attributes_state_change(RAM_BLOCK_ATTRIBUTES(mr->rdm),
+                                                offset, size, to_private);
+        if (ret) {
+            error_report("Failed to notify the listener the state change of "
+                         "(0x%"HWADDR_PRIx" + 0x%"HWADDR_PRIx") to %s",
+                         start, size, to_private ? "private" : "shared");
+            goto out_unref;
+        }
+    }
+
+    in_place_conversion = memory_region_guest_memfd_in_place_conversion(mr);
+    if (in_place_conversion) {
+        ret = kvm_set_guest_memfd_shareability(mr, offset, size, !to_private);
+    } else {
+        if (to_private) {
+            ret = kvm_set_memory_attributes_private(start, size);
+        } else {
+            ret = kvm_set_memory_attributes_shared(start, size);
+        }
+    }
     if (ret) {
-        error_report("Failed to notify the listener the state change of "
-                     "(0x%"HWADDR_PRIx" + 0x%"HWADDR_PRIx") to %s",
-                     start, size, to_private ? "private" : "shared");
         goto out_unref;
     }
 
-    if (to_private) {
-        if (rb->page_size != qemu_real_host_page_size()) {
-            /*
-             * shared memory is backed by hugetlb, which is supposed to be
-             * pre-allocated and doesn't need to be discarded
-             */
+    if (!to_private) {
+        ret = ram_block_attributes_state_change(RAM_BLOCK_ATTRIBUTES(mr->rdm),
+                                                offset, size, to_private);
+        if (ret) {
+            error_report("Failed to notify the listener the state change of "
+                         "(0x%"HWADDR_PRIx" + 0x%"HWADDR_PRIx") to %s",
+                         start, size, to_private ? "private" : "shared");
             goto out_unref;
         }
-        ret = ram_block_discard_range(rb, offset, size);
-    } else {
-        ret = ram_block_discard_guest_memfd_range(rb, offset, size);
+    }
+
+    if (!in_place_conversion) {
+        if (to_private) {
+            if (rb->page_size != qemu_real_host_page_size()) {
+               /*
+                * shared memory is backed by hugetlb, which is supposed to be
+                * pre-allocated and doesn't need to be discarded
+                */
+                goto out_unref;
+             }
+             ret = ram_block_discard_range(rb, offset, size);
+         } else {
+             ret = ram_block_discard_guest_memfd_range(rb, offset, size);
+         }
     }
 
 out_unref:
