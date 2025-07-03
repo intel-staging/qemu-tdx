@@ -91,6 +91,7 @@ static int tdx_ioctl_internal(enum tdx_ioctl_level level, void *state,
         [KVM_TDX_INIT_MEM_REGION] = "KVM_TDX_INIT_MEM_REGION",
         [KVM_TDX_FINALIZE_VM] = "KVM_TDX_FINALIZE_VM",
         [KVM_TDX_GET_CPUID] = "KVM_TDX_GET_CPUID",
+        [KVM_TDX_TERMINATE_VM] = "KVM_TDX_TERMINATE_VM",
     };
 
     tdx_cmd.id = cmd_id;
@@ -295,6 +296,11 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+static void tdx_terminate_vm(void)
+{
+    tdx_vm_ioctl(KVM_TDX_TERMINATE_VM, 0, NULL, &error_fatal);
+}
+
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     TdxFirmware *tdvf = &tdx_guest->tdvf;
@@ -380,6 +386,10 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
 
     tdx_vm_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL, &error_fatal);
     CONFIDENTIAL_GUEST_SUPPORT(tdx_guest)->ready = true;
+
+    if (tdx_caps->supported_caps & KVM_TDX_CAP_TERMINATE_VM) {
+        atexit(tdx_terminate_vm);
+    }
 }
 
 static Notifier tdx_machine_done_notify = {
