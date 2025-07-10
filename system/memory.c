@@ -3704,7 +3704,7 @@ bool memory_region_init_ram_guest_memfd(MemoryRegion *mr,
     DeviceState *owner_dev;
 
     if (!memory_region_init_ram_flags_nomigrate(mr, owner, name, size,
-                                                RAM_GUEST_MEMFD, errp)) {
+                                                RAM_GUEST_MEMFD | RAM_GUEST_MEMFD_NO_INPLACE, errp)) {
         return false;
     }
     /* This will assert if owner is neither NULL nor a DeviceState.
