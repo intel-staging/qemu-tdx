@@ -1938,8 +1938,21 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
                                             GUEST_MEMFD_FLAG_INIT_PRIVATE;
         }
 
+        if (kvm_guest_memfd_hugetlb_supported) {
+            new_block->guest_memfd_flags |= GUEST_MEMFD_FLAG_HUGETLB |
+                                            GUESTMEM_HUGETLB_FLAG_2MB;
+        }
+
+        new_block->guest_memfd = kvm_create_guest_memfd(new_block->max_length,
+                                 new_block->guest_memfd_flags, &err);
+        if (new_block->guest_memfd == -ENOMEM) {
+            error_free(err);
+            new_block->guest_memfd_flags &= ~(GUEST_MEMFD_FLAG_HUGETLB |
+                                              GUESTMEM_HUGETLB_FLAG_2MB);
+        }
         new_block->guest_memfd = kvm_create_guest_memfd(new_block->max_length,
                                  new_block->guest_memfd_flags, errp);
+
         if (new_block->guest_memfd < 0) {
             qemu_mutex_unlock_ramlist();
             goto out_free;
