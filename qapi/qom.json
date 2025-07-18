@@ -653,7 +653,8 @@
 # @share: if false, the memory is private to QEMU; if true, it is
 #     shared (default false for backends memory-backend-file and
 #     memory-backend-ram, true for backends memory-backend-epc,
-#     memory-backend-memfd, and memory-backend-shm)
+#     memory-backend-memfd, memory-bakcend-guest-memfd, and
+#     memory-backend-shm)
 #
 # @reserve: if true, reserve swap space (or huge pages) if applicable
 #     (default: true) (since 6.1)
@@ -770,6 +771,20 @@
   'data': { '*hugetlb': 'bool',
             '*hugetlbsize': 'size',
             '*seal': 'bool' },
+  'if': 'CONFIG_LINUX' }
+
+##
+# @MemoryBackendGuestMemfdProperties:
+#
+# Properties for memory-backend-guest-memfd objects.
+#
+# The @share boolean option is true by default with guest memfd.
+#
+# Since: 10.2
+##
+{ 'struct': 'MemoryBackendGuestMemfdProperties',
+  'base': 'MemoryBackendProperties',
+  'data': { },
   'if': 'CONFIG_LINUX' }
 
 ##
@@ -1214,6 +1229,8 @@
     'memory-backend-file',
     { 'name': 'memory-backend-memfd',
       'if': 'CONFIG_LINUX' },
+    { 'name': 'memory-backend-guest-memfd',
+      'if': 'CONFIG_LINUX' },
     'memory-backend-ram',
     { 'name': 'memory-backend-shm',
       'if': 'CONFIG_POSIX' },
@@ -1291,6 +1308,8 @@
                                       'if': 'CONFIG_LINUX' },
       'memory-backend-file':        'MemoryBackendFileProperties',
       'memory-backend-memfd':       { 'type': 'MemoryBackendMemfdProperties',
+                                      'if': 'CONFIG_LINUX' },
+      'memory-backend-guest-memfd': { 'type': 'MemoryBackendGuestMemfdProperties',
                                       'if': 'CONFIG_LINUX' },
       'memory-backend-ram':         'MemoryBackendProperties',
       'memory-backend-shm':         { 'type': 'MemoryBackendShmProperties',
