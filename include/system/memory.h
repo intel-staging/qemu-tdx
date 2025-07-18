@@ -275,6 +275,8 @@ typedef struct IOMMUTLBEvent {
  */
 #define RAM_PRIVATE (1 << 13)
 
+#define RAM_FD_IS_GUEST_MEMFD   (1 << 14)
+
 #define RAM_FLAGS_ALLOWED_INTERNAL  (RAM_PREALLOC | RAM_SHARED | \
                                      RAM_RESIZEABLE | RAM_NORESERVE | \
                                      RAM_PRIVATE_MEMORY | RAM_PRIVATE)
@@ -283,7 +285,7 @@ typedef struct IOMMUTLBEvent {
                                  RAM_NORESERVE | RAM_PROTECTED | \
                                  RAM_NAMED_FILE | RAM_READONLY | \
                                  RAM_READONLY_FD | RAM_PRIVATE_MEMORY |\
-                                 RAM_PRIVATE)
+                                 RAM_PRIVATE | RAM_FD_IS_GUEST_MEMFD)
 
 #define CHECK_SHARED_PRIVATE_FLAGS(flags)                       \
 do {                                                            \
