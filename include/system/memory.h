@@ -275,6 +275,15 @@ typedef struct IOMMUTLBEvent {
  */
 #define RAM_PRIVATE (1 << 13)
 
+#define RAM_FLAGS_ALLOWED_INTERNAL  (RAM_PREALLOC | RAM_SHARED | \
+                                     RAM_RESIZEABLE | RAM_NORESERVE | \
+                                     RAM_GUEST_MEMFD)
+
+#define RAM_FLAGS_ALLOWED_FD    (RAM_SHARED | RAM_RESIZEABLE | RAM_PMEM | \
+                                 RAM_NORESERVE | RAM_PROTECTED | \
+                                 RAM_NAMED_FILE | RAM_READONLY | \
+                                 RAM_READONLY_FD | RAM_GUEST_MEMFD)
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,
@@ -1460,9 +1469,7 @@ bool memory_region_init_resizeable_ram(MemoryRegion *mr,
  * @size: size of the region.
  * @align: alignment of the region base address; if 0, the default alignment
  *         (getpagesize()) will be used.
- * @ram_flags: RamBlock flags. Supported flags: RAM_SHARED, RAM_PMEM,
- *             RAM_NORESERVE, RAM_PROTECTED, RAM_NAMED_FILE, RAM_READONLY,
- *             RAM_READONLY_FD, RAM_GUEST_MEMFD
+ * @ram_flags: RamBlock flags. Supported flags: RAM_FLAGS_ALLOWED_FD.
  * @path: the path in which to allocate the RAM.
  * @offset: offset within the file referenced by path
  * @errp: pointer to Error*, to store an error if it happens.
@@ -1490,9 +1497,7 @@ bool memory_region_init_ram_from_file(MemoryRegion *mr,
  * @owner: the object that tracks the region's reference count
  * @name: the name of the region.
  * @size: size of the region.
- * @ram_flags: RamBlock flags. Supported flags: RAM_SHARED, RAM_PMEM,
- *             RAM_NORESERVE, RAM_PROTECTED, RAM_NAMED_FILE, RAM_READONLY,
- *             RAM_READONLY_FD, RAM_GUEST_MEMFD
+ * @ram_flags: RamBlock flags. Supported flags: RAM_FLAGS_ALLOWED_FD.
  * @fd: the fd to mmap.
  * @offset: offset within the file referenced by fd
  * @errp: pointer to Error*, to store an error if it happens.

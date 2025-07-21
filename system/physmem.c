@@ -2038,11 +2038,7 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, ram_addr_t max_size,
     assert(share_flags != (RAM_SHARED | RAM_PRIVATE));
     ram_flags &= ~RAM_PRIVATE;
 
-    /* Just support these ram flags by now. */
-    assert((ram_flags & ~(RAM_SHARED | RAM_PMEM | RAM_NORESERVE |
-                          RAM_PROTECTED | RAM_NAMED_FILE | RAM_READONLY |
-                          RAM_READONLY_FD | RAM_GUEST_MEMFD |
-                          RAM_RESIZEABLE)) == 0);
+    assert((ram_flags & ~RAM_FLAGS_ALLOWED_FD) == 0);
     assert(max_size >= size);
 
     if (xen_enabled()) {
@@ -2197,8 +2193,7 @@ RAMBlock *qemu_ram_alloc_internal(ram_addr_t size, ram_addr_t max_size,
     assert(share_flags != (RAM_SHARED | RAM_PRIVATE));
     ram_flags &= ~RAM_PRIVATE;
 
-    assert((ram_flags & ~(RAM_SHARED | RAM_RESIZEABLE | RAM_PREALLOC |
-                          RAM_NORESERVE | RAM_GUEST_MEMFD)) == 0);
+    assert((ram_flags & ~RAM_FLAGS_ALLOWED_INTERNAL) == 0);
     assert(!host ^ (ram_flags & RAM_PREALLOC));
     assert(max_size >= size);
 
