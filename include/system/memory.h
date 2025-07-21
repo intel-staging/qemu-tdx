@@ -285,6 +285,13 @@ typedef struct IOMMUTLBEvent {
                                  RAM_READONLY_FD | RAM_GUEST_MEMFD |\
                                  RAM_PRIVATE)
 
+#define CHECK_SHARED_PRIVATE_FLAGS(flags)                       \
+do {                                                            \
+    uint32_t _share_flags = flags & (RAM_PRIVATE | RAM_SHARED); \
+    /* The ram cannot be both shared and private */             \
+    assert(_share_flags != (RAM_SHARED | RAM_PRIVATE));         \
+} while (0)                                                     \
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,
