@@ -2328,7 +2328,6 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, ram_addr_t max_size,
 
     share_flags = ram_flags & (RAM_PRIVATE | RAM_SHARED);
     assert(share_flags != (RAM_SHARED | RAM_PRIVATE));
-    ram_flags &= ~RAM_PRIVATE;
 
     assert((ram_flags & ~RAM_FLAGS_ALLOWED_FD) == 0);
     assert(max_size >= size);
@@ -2483,7 +2482,6 @@ RAMBlock *qemu_ram_alloc_internal(ram_addr_t size, ram_addr_t max_size,
 
     share_flags = ram_flags & (RAM_PRIVATE | RAM_SHARED);
     assert(share_flags != (RAM_SHARED | RAM_PRIVATE));
-    ram_flags &= ~RAM_PRIVATE;
 
     assert((ram_flags & ~RAM_FLAGS_ALLOWED_INTERNAL) == 0);
     assert(!host ^ (ram_flags & RAM_PREALLOC));

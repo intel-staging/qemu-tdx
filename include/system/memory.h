@@ -277,12 +277,13 @@ typedef struct IOMMUTLBEvent {
 
 #define RAM_FLAGS_ALLOWED_INTERNAL  (RAM_PREALLOC | RAM_SHARED | \
                                      RAM_RESIZEABLE | RAM_NORESERVE | \
-                                     RAM_GUEST_MEMFD)
+                                     RAM_GUEST_MEMFD | RAM_PRIVATE)
 
 #define RAM_FLAGS_ALLOWED_FD    (RAM_SHARED | RAM_RESIZEABLE | RAM_PMEM | \
                                  RAM_NORESERVE | RAM_PROTECTED | \
                                  RAM_NAMED_FILE | RAM_READONLY | \
-                                 RAM_READONLY_FD | RAM_GUEST_MEMFD)
+                                 RAM_READONLY_FD | RAM_GUEST_MEMFD |\
+                                 RAM_PRIVATE)
 
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
