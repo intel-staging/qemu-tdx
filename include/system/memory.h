@@ -262,8 +262,8 @@ typedef struct IOMMUTLBEvent {
 /* RAM FD is opened read-only */
 #define RAM_READONLY_FD (1 << 11)
 
-/* RAM can be private that has kvm guest memfd backend */
-#define RAM_GUEST_MEMFD   (1 << 12)
+/* RAM can be private and has kvm guest memfd serving as private only */
+#define RAM_PRIVATE_MEMORY   (1 << 12)
 
 /*
  * In RAMBlock creation functions, if MAP_SHARED is 0 in the flags parameter,
@@ -277,12 +277,12 @@ typedef struct IOMMUTLBEvent {
 
 #define RAM_FLAGS_ALLOWED_INTERNAL  (RAM_PREALLOC | RAM_SHARED | \
                                      RAM_RESIZEABLE | RAM_NORESERVE | \
-                                     RAM_GUEST_MEMFD | RAM_PRIVATE)
+                                     RAM_PRIVATE_MEMORY | RAM_PRIVATE)
 
 #define RAM_FLAGS_ALLOWED_FD    (RAM_SHARED | RAM_RESIZEABLE | RAM_PMEM | \
                                  RAM_NORESERVE | RAM_PROTECTED | \
                                  RAM_NAMED_FILE | RAM_READONLY | \
-                                 RAM_READONLY_FD | RAM_GUEST_MEMFD |\
+                                 RAM_READONLY_FD | RAM_PRIVATE_MEMORY |\
                                  RAM_PRIVATE)
 
 #define CHECK_SHARED_PRIVATE_FLAGS(flags)                       \

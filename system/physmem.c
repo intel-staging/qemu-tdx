@@ -1911,7 +1911,7 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
         }
     }
 
-    if (new_block->flags & RAM_GUEST_MEMFD) {
+    if (new_block->flags & RAM_PRIVATE_MEMORY) {
         int ret;
 
         if (!kvm_enabled()) {
