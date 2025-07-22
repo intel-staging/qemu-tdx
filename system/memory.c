@@ -1880,6 +1880,11 @@ bool memory_region_has_guest_memfd(MemoryRegion *mr)
     return mr->ram_block && mr->ram_block->guest_memfd >= 0;
 }
 
+bool memory_region_has_private_memory(MemoryRegion *mr)
+{
+    return mr->ram_block && mr->ram_block->flags & RAM_PRIVATE_MEMORY;
+}
+
 uint8_t memory_region_get_dirty_log_mask(MemoryRegion *mr)
 {
     uint8_t mask = mr->dirty_log_mask;
