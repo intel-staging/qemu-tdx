@@ -65,9 +65,9 @@ struct ConfidentialGuestSupport {
     Object parent;
 
     /*
-     * True if the machine should use guest_memfd for RAM.
+     * True if the machine requires private memory back'ed by guest memfd.
      */
-    bool require_guest_memfd;
+    bool require_private_memory;
 
     /*
      * ready: flag set by CGS initialization code once it's ready to

@@ -1374,9 +1374,9 @@ bool machine_mem_merge(MachineState *machine)
     return machine->mem_merge;
 }
 
-bool machine_require_guest_memfd(MachineState *machine)
+bool machine_require_private_memory(MachineState *machine)
 {
-    return machine->cgs && machine->cgs->require_guest_memfd;
+    return machine->cgs && machine->cgs->require_private_memory;
 }
 
 static char *cpu_slot_to_string(const CPUArchId *cpu)
