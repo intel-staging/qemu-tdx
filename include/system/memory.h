@@ -1845,6 +1845,17 @@ bool memory_region_is_protected(MemoryRegion *mr);
 bool memory_region_has_guest_memfd(MemoryRegion *mr);
 
 /**
+ * bool memory_region_has_private_memory: check whether a memory region has
+ *     private memory
+ *
+ * Returns %true if the ram_flags of memory region's ram_block has bit
+ * RAM_PRIVATE_MEMORY set.
+ *
+ * @mr: the memory region being queried
+ */
+bool memory_region_has_private_memory(MemoryRegion *mr);
+
+/**
  * memory_region_get_iommu: check whether a memory region is an iommu
  *
  * Returns pointer to IOMMUMemoryRegion if a memory region is an iommu,
