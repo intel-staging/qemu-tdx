@@ -57,14 +57,16 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
     }
 
     if (m->guest_memfd) {
+        /*
+         * NOTE: guest-memfd ignores seal=on/off because it always
+         * implicitly seals the FD by definition.
+         */
         if (!backend->share) {
             error_setg(errp, "guest-memfd=on must be used with share=on");
             return false;
-        } else if (m->seal) {
-            error_setg(errp, "guest-memfd=on must be used with seal=off");
-            return false;
         } else if (m->hugetlb) {
-            error_setg(errp, "guest-memfd=on must be used with hugetlb=off");
+            error_setg(errp, "guest-memfd=on doesn't support hugetlb=on yet");
+            return false;
         }
 
         fd = kvm_create_guest_memfd(backend->size,
