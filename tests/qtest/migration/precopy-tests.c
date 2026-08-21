@@ -184,7 +184,6 @@ static void test_precopy_tcp_plain(char *name, MigrateCommon *args)
 
 static void test_precopy_tcp_plain_gmemfd(char *name, MigrateCommon *args)
 {
-    args->uri = "tcp:127.0.0.1:0";
     args->start.mem_type = MEM_TYPE_GUEST_MEMFD;
 
     test_precopy_common(args);
